@@ -1,0 +1,29 @@
+# 编译产物
+*.o
+*.exe
+*.ko
+*.mod
+*.cmd
+.*.cmd
+*.d
+*.log
+*.tmp
+*.output
+build.log
+
+# 构建输出
+/build/
+/target/
+
+# lib 下的编译产物（但不忽略 submodule 本身）
+/lib/*.a
+/lib/*.o
+/lib/*.so
+
+# IDE / 缓存
+compile_commands.json
+.cache/
+.clangd
+
+# 可执行文件
+test
