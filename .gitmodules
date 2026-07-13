@@ -7,3 +7,6 @@
 [submodule "libbpf"]
 	path = ./lib/libbpf
 	url = https://github.com/libbpf/libbpf.git
+[submodule "lib/vsomeip"]
+	path = lib/vsomeip
+	url = https://github.com/COVESA/vsomeip.git

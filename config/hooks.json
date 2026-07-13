@@ -1,0 +1,100 @@
+{
+    "target_paths": {
+        "libvsomeip3.so.3.7.4": "/usr/lib/libvsomeip3.so.3",
+        "libvsomeip3-sd.so.3.7.4": "/usr/lib/libvsomeip3-sd.so.3",
+        "libvsomeip3-cfg.so.3.7.4": "/usr/lib/libvsomeip3-cfg.so.3",
+        "libvsomeip3-e2e.so.3.7.4": "/usr/lib/libvsomeip3-e2e.so.3"
+    },
+    "hooks": [
+        {
+            "name": "rm_send",
+            "demangled": "vsomeip_v3::routing_manager_impl::send(unsigned short, unsigned char const*, unsigned int, unsigned short, bool, unsigned short, vsomeip_sec_client_t const*, unsigned char, bool, bool)",
+            "lib": "libvsomeip3.so.3.7.4",
+            "retprobe": false
+        },
+        {
+            "name": "rm_send_to",
+            "demangled": "vsomeip_v3::routing_manager_impl::send_to(std::shared_ptr<vsomeip_v3::endpoint_definition> const&, unsigned char const*, unsigned int, unsigned short)",
+            "lib": "libvsomeip3.so.3.7.4",
+            "retprobe": false
+        },
+        {
+            "name": "app_send",
+            "demangled": "vsomeip_v3::application_impl::send(std::shared_ptr<vsomeip_v3::message>)",
+            "lib": "libvsomeip3.so.3.7.4",
+            "retprobe": false
+        },
+        {
+            "name": "app_on_message",
+            "demangled": "vsomeip_v3::application_impl::on_message(std::shared_ptr<vsomeip_v3::message>&&)",
+            "lib": "libvsomeip3.so.3.7.4",
+            "retprobe": false
+        },
+        {
+            "name": "app_offer_service",
+            "demangled": "vsomeip_v3::application_impl::offer_service(unsigned short, unsigned short, unsigned char, unsigned int)",
+            "lib": "libvsomeip3.so.3.7.4",
+            "retprobe": false
+        },
+        {
+            "name": "msg_serialize",
+            "demangled": "vsomeip_v3::message_impl::serialize(vsomeip_v3::serializer*) const",
+            "lib": "libvsomeip3.so.3.7.4",
+            "retprobe": false
+        },
+        {
+            "name": "msg_header_serialize",
+            "demangled": "vsomeip_v3::message_header_impl::serialize(vsomeip_v3::serializer*) const",
+            "lib": "libvsomeip3.so.3.7.4",
+            "retprobe": false
+        },
+        {
+            "name": "msg_header_deserialize",
+            "demangled": "vsomeip_v3::message_header_impl::deserialize(vsomeip_v3::deserializer*)",
+            "lib": "libvsomeip3.so.3.7.4",
+            "retprobe": false
+        },
+        {
+            "name": "payload_set_data",
+            "demangled": "vsomeip_v3::payload_impl::set_data(unsigned char const*, unsigned int)",
+            "lib": "libvsomeip3.so.3.7.4",
+            "retprobe": false
+        },
+        {
+            "name": "payload_get_data",
+            "demangled": "vsomeip_v3::payload_impl::get_data() const",
+            "lib": "libvsomeip3.so.3.7.4",
+            "retprobe": true
+        },
+        {
+            "name": "serializer_serialize_data",
+            "demangled": "vsomeip_v3::serializer::serialize(unsigned char const*, unsigned int)",
+            "lib": "libvsomeip3.so.3.7.4",
+            "retprobe": false
+        },
+        {
+            "name": "deserializer_deserialize_message",
+            "demangled": "vsomeip_v3::deserializer::deserialize_message()",
+            "lib": "libvsomeip3.so.3.7.4",
+            "retprobe": false
+        },
+        {
+            "name": "tcp_server_send_to",
+            "demangled": "vsomeip_v3::tcp_server_endpoint_impl::send_to(std::shared_ptr<vsomeip_v3::endpoint_definition>, unsigned char const*, unsigned int)",
+            "lib": "libvsomeip3.so.3.7.4",
+            "retprobe": false
+        },
+        {
+            "name": "udp_server_send_to",
+            "demangled": "vsomeip_v3::udp_server_endpoint_impl::send_to(std::shared_ptr<vsomeip_v3::endpoint_definition>, unsigned char const*, unsigned int)",
+            "lib": "libvsomeip3.so.3.7.4",
+            "retprobe": false
+        },
+        {
+            "name": "sd_send_subscription",
+            "demangled": "vsomeip_v3::sd::service_discovery_impl::send_subscription(std::shared_ptr<vsomeip_v3::sd::subscription> const&, unsigned short, unsigned short, unsigned short, unsigned short)",
+            "lib": "libvsomeip3-sd.so.3.7.4",
+            "retprobe": false
+        }
+    ]
+}
