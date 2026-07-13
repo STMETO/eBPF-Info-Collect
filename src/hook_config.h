@@ -17,22 +17,19 @@ struct hook_cfg {
 
 
 static const struct hook_cfg hook_configs[] = {
-    {"rm_send", "libvsomeip3.so.3.7.4", "/usr/lib/libvsomeip3.so.3", (size_t)0x0000000000169340, 0},
-    {"rm_send_to", "libvsomeip3.so.3.7.4", "/usr/lib/libvsomeip3.so.3", (size_t)0x000000000016a720, 0},
-    {"app_send", "libvsomeip3.so.3.7.4", "/usr/lib/libvsomeip3.so.3", (size_t)0x00000000001bb340, 0},
+    {"rm_send_entry", "libvsomeip3.so.3.7.4", "/usr/lib/libvsomeip3.so.3", (size_t)0x0000000000169340, 0},
+    {"rm_send_ret", "libvsomeip3.so.3.7.4", "/usr/lib/libvsomeip3.so.3", (size_t)0x0000000000169340, 1},
+    {"rm_send_to_entry", "libvsomeip3.so.3.7.4", "/usr/lib/libvsomeip3.so.3", (size_t)0x000000000016a720, 0},
+    {"rm_send_to_ret", "libvsomeip3.so.3.7.4", "/usr/lib/libvsomeip3.so.3", (size_t)0x000000000016a720, 1},
+    {"rm_on_message", "libvsomeip3.so.3.7.4", "/usr/lib/libvsomeip3.so.3", (size_t)0x0000000000172630, 0},
+    {"app_send_entry", "libvsomeip3.so.3.7.4", "/usr/lib/libvsomeip3.so.3", (size_t)0x00000000001bb340, 0},
+    {"app_send_ret", "libvsomeip3.so.3.7.4", "/usr/lib/libvsomeip3.so.3", (size_t)0x00000000001bb340, 1},
     {"app_on_message", "libvsomeip3.so.3.7.4", "/usr/lib/libvsomeip3.so.3", (size_t)0x00000000001bc670, 0},
-    {"app_offer_service", "libvsomeip3.so.3.7.4", "/usr/lib/libvsomeip3.so.3", (size_t)0x00000000001a44d0, 0},
-    {"msg_serialize", "libvsomeip3.so.3.7.4", "/usr/lib/libvsomeip3.so.3", (size_t)0x000000000010b0b0, 0},
-    {"msg_header_serialize", "libvsomeip3.so.3.7.4", "/usr/lib/libvsomeip3.so.3", (size_t)0x0000000000109cd0, 0},
-    {"msg_header_deserialize", "libvsomeip3.so.3.7.4", "/usr/lib/libvsomeip3.so.3", (size_t)0x0000000000109eb0, 0},
-    {"payload_set_data", "libvsomeip3.so.3.7.4", "/usr/lib/libvsomeip3.so.3", (size_t)0x000000000010b6a0, 0},
-    {"payload_get_data", "libvsomeip3.so.3.7.4", "/usr/lib/libvsomeip3.so.3", (size_t)0x000000000010b170, 1},
-    {"serializer_serialize_data", "libvsomeip3.so.3.7.4", "/usr/lib/libvsomeip3.so.3", (size_t)0x000000000010be20, 0},
-    {"deserializer_deserialize_message", "libvsomeip3.so.3.7.4", "/usr/lib/libvsomeip3.so.3", (size_t)0x0000000000109370, 0},
-    {"tcp_server_send_to", "libvsomeip3.so.3.7.4", "/usr/lib/libvsomeip3.so.3", (size_t)0x00000000000d73f0, 0},
-    {"udp_server_send_to", "libvsomeip3.so.3.7.4", "/usr/lib/libvsomeip3.so.3", (size_t)0x00000000000f74a0, 0},
+    {"sd_send", "libvsomeip3-sd.so.3.7.4", "/usr/lib/libvsomeip3-sd.so.3", (size_t)0x000000000002c7e0, 0},
+    {"sd_process_offer", "libvsomeip3-sd.so.3.7.4", "/usr/lib/libvsomeip3-sd.so.3", (size_t)0x0000000000038a30, 0},
     {"sd_send_subscription", "libvsomeip3-sd.so.3.7.4", "/usr/lib/libvsomeip3-sd.so.3", (size_t)0x0000000000035e80, 0},
+    {"sd_handle_subscription", "libvsomeip3-sd.so.3.7.4", "/usr/lib/libvsomeip3-sd.so.3", (size_t)0x000000000002ea30, 0},
 };
-#define NUM_HOOKS 15
+#define NUM_HOOKS 12
 
-// Generated: 15 hooks resolved, 0 not found
+// Generated: 12 hooks resolved, 0 not found

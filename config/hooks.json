@@ -1,100 +1,104 @@
 {
     "target_paths": {
         "libvsomeip3.so.3.7.4": "/usr/lib/libvsomeip3.so.3",
-        "libvsomeip3-sd.so.3.7.4": "/usr/lib/libvsomeip3-sd.so.3",
-        "libvsomeip3-cfg.so.3.7.4": "/usr/lib/libvsomeip3-cfg.so.3",
-        "libvsomeip3-e2e.so.3.7.4": "/usr/lib/libvsomeip3-e2e.so.3"
+        "libvsomeip3-sd.so.3.7.4": "/usr/lib/libvsomeip3-sd.so.3"
     },
     "hooks": [
         {
-            "name": "rm_send",
+            "name": "rm_send_entry",
             "demangled": "vsomeip_v3::routing_manager_impl::send(unsigned short, unsigned char const*, unsigned int, unsigned short, bool, unsigned short, vsomeip_sec_client_t const*, unsigned char, bool, bool)",
             "lib": "libvsomeip3.so.3.7.4",
-            "retprobe": false
+            "retprobe": false,
+            "module": "routing",
+            "note": "入口：所有 SOME/IP 消息发出发送，PARM3=data_ptr PARM4=data_len → 读 header"
         },
         {
-            "name": "rm_send_to",
+            "name": "rm_send_ret",
+            "demangled": "vsomeip_v3::routing_manager_impl::send(unsigned short, unsigned char const*, unsigned int, unsigned short, bool, unsigned short, vsomeip_sec_client_t const*, unsigned char, bool, bool)",
+            "lib": "libvsomeip3.so.3.7.4",
+            "retprobe": true,
+            "module": "routing",
+            "note": "返回：send() 返回值 0=成功 !0=失败"
+        },
+        {
+            "name": "rm_send_to_entry",
             "demangled": "vsomeip_v3::routing_manager_impl::send_to(std::shared_ptr<vsomeip_v3::endpoint_definition> const&, unsigned char const*, unsigned int, unsigned short)",
             "lib": "libvsomeip3.so.3.7.4",
-            "retprobe": false
+            "retprobe": false,
+            "module": "routing",
+            "note": "入口：定向发送到具体端点，PARM3=data_ptr PARM4=data_len"
         },
         {
-            "name": "app_send",
+            "name": "rm_send_to_ret",
+            "demangled": "vsomeip_v3::routing_manager_impl::send_to(std::shared_ptr<vsomeip_v3::endpoint_definition> const&, unsigned char const*, unsigned int, unsigned short)",
+            "lib": "libvsomeip3.so.3.7.4",
+            "retprobe": true,
+            "module": "routing",
+            "note": "返回：端点发送结果"
+        },
+        {
+            "name": "rm_on_message",
+            "demangled": "vsomeip_v3::routing_manager_impl::on_message(unsigned char const*, unsigned int, vsomeip_v3::boardnet_endpoint*, boost::asio::ip::address const&, unsigned short, bool)",
+            "lib": "libvsomeip3.so.3.7.4",
+            "retprobe": false,
+            "module": "routing",
+            "note": "入口：所有收到的 SOME/IP 消息入口，PARM2=data_ptr PARM3=data_len → 读 header"
+        },
+        {
+            "name": "app_send_entry",
             "demangled": "vsomeip_v3::application_impl::send(std::shared_ptr<vsomeip_v3::message>)",
             "lib": "libvsomeip3.so.3.7.4",
-            "retprobe": false
+            "retprobe": false,
+            "module": "app",
+            "note": "入口：应用程序调用 send()"
+        },
+        {
+            "name": "app_send_ret",
+            "demangled": "vsomeip_v3::application_impl::send(std::shared_ptr<vsomeip_v3::message>)",
+            "lib": "libvsomeip3.so.3.7.4",
+            "retprobe": true,
+            "module": "app",
+            "note": "返回：应用层 send() 返回值"
         },
         {
             "name": "app_on_message",
             "demangled": "vsomeip_v3::application_impl::on_message(std::shared_ptr<vsomeip_v3::message>&&)",
             "lib": "libvsomeip3.so.3.7.4",
-            "retprobe": false
+            "retprobe": false,
+            "module": "app",
+            "note": "入口：消息被投递到应用程序"
         },
         {
-            "name": "app_offer_service",
-            "demangled": "vsomeip_v3::application_impl::offer_service(unsigned short, unsigned short, unsigned char, unsigned int)",
-            "lib": "libvsomeip3.so.3.7.4",
-            "retprobe": false
+            "name": "sd_send",
+            "demangled": "vsomeip_v3::sd::service_discovery_impl::send(bool)",
+            "lib": "libvsomeip3-sd.so.3.7.4",
+            "retprobe": false,
+            "module": "sd",
+            "note": "入口：SD 消息队列刷新到网络"
         },
         {
-            "name": "msg_serialize",
-            "demangled": "vsomeip_v3::message_impl::serialize(vsomeip_v3::serializer*) const",
-            "lib": "libvsomeip3.so.3.7.4",
-            "retprobe": false
-        },
-        {
-            "name": "msg_header_serialize",
-            "demangled": "vsomeip_v3::message_header_impl::serialize(vsomeip_v3::serializer*) const",
-            "lib": "libvsomeip3.so.3.7.4",
-            "retprobe": false
-        },
-        {
-            "name": "msg_header_deserialize",
-            "demangled": "vsomeip_v3::message_header_impl::deserialize(vsomeip_v3::deserializer*)",
-            "lib": "libvsomeip3.so.3.7.4",
-            "retprobe": false
-        },
-        {
-            "name": "payload_set_data",
-            "demangled": "vsomeip_v3::payload_impl::set_data(unsigned char const*, unsigned int)",
-            "lib": "libvsomeip3.so.3.7.4",
-            "retprobe": false
-        },
-        {
-            "name": "payload_get_data",
-            "demangled": "vsomeip_v3::payload_impl::get_data() const",
-            "lib": "libvsomeip3.so.3.7.4",
-            "retprobe": true
-        },
-        {
-            "name": "serializer_serialize_data",
-            "demangled": "vsomeip_v3::serializer::serialize(unsigned char const*, unsigned int)",
-            "lib": "libvsomeip3.so.3.7.4",
-            "retprobe": false
-        },
-        {
-            "name": "deserializer_deserialize_message",
-            "demangled": "vsomeip_v3::deserializer::deserialize_message()",
-            "lib": "libvsomeip3.so.3.7.4",
-            "retprobe": false
-        },
-        {
-            "name": "tcp_server_send_to",
-            "demangled": "vsomeip_v3::tcp_server_endpoint_impl::send_to(std::shared_ptr<vsomeip_v3::endpoint_definition>, unsigned char const*, unsigned int)",
-            "lib": "libvsomeip3.so.3.7.4",
-            "retprobe": false
-        },
-        {
-            "name": "udp_server_send_to",
-            "demangled": "vsomeip_v3::udp_server_endpoint_impl::send_to(std::shared_ptr<vsomeip_v3::endpoint_definition>, unsigned char const*, unsigned int)",
-            "lib": "libvsomeip3.so.3.7.4",
-            "retprobe": false
+            "name": "sd_process_offer",
+            "demangled": "vsomeip_v3::sd::service_discovery_impl::process_offerservice_serviceentry(unsigned short, unsigned short, unsigned char, unsigned int, unsigned int, boost::asio::ip::address const&, unsigned short, boost::asio::ip::address const&, unsigned short, std::vector<std::shared_ptr<vsomeip_v3::sd::message_impl>, std::allocator<std::shared_ptr<vsomeip_v3::sd::message_impl> > >&, bool, vsomeip_v3::sd::service_discovery_impl::sd_acceptance_state_t const&)",
+            "lib": "libvsomeip3-sd.so.3.7.4",
+            "retprobe": false,
+            "module": "sd",
+            "note": "入口：收到 OfferService 条目"
         },
         {
             "name": "sd_send_subscription",
             "demangled": "vsomeip_v3::sd::service_discovery_impl::send_subscription(std::shared_ptr<vsomeip_v3::sd::subscription> const&, unsigned short, unsigned short, unsigned short, unsigned short)",
             "lib": "libvsomeip3-sd.so.3.7.4",
-            "retprobe": false
+            "retprobe": false,
+            "module": "sd",
+            "note": "入口：发送 SubscribeEventgroup"
+        },
+        {
+            "name": "sd_handle_subscription",
+            "demangled": "vsomeip_v3::sd::service_discovery_impl::handle_eventgroup_subscription(unsigned short, unsigned short, unsigned short, unsigned char, unsigned int, unsigned short, boost::asio::ip::address const&, unsigned short, bool, boost::asio::ip::address const&, unsigned short, bool, std::shared_ptr<vsomeip_v3::sd::remote_subscription_ack>&, bool, bool, std::set<unsigned short, std::less<unsigned short>, std::allocator<unsigned short> > const&, vsomeip_v3::sd::service_discovery_impl::sd_acceptance_state_t const&, std::shared_ptr<vsomeip_v3::eventgroupinfo> const&, boost::asio::ip::address const&)",
+            "lib": "libvsomeip3-sd.so.3.7.4",
+            "retprobe": false,
+            "module": "sd",
+            "note": "入口：处理收到的订阅请求"
         }
     ]
 }
