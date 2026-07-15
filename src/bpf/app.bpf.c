@@ -64,7 +64,7 @@ static __always_inline int submit_app_event(
 // 注意：shared_ptr 在 x86-64 上通过寄存器传递（8 bytes），
 // 其内部是一个指向 message_impl 对象的裸指针。
 // ═══════════════════════════════════════════════════════════════════════
-SEC("uprobe/hook_app_send_entry")
+SEC("uprobe/app_send_entry")
 int hook_app_send_entry(struct pt_regs *ctx)
 {
     return submit_app_event(
@@ -80,7 +80,7 @@ int hook_app_send_entry(struct pt_regs *ctx)
 // 返回值：0 = 成功发送，非0 = 发送失败
 // 用户态将 entry 和 ret 配对 → 应用层发送耗时 + 成功率
 // ═══════════════════════════════════════════════════════════════════════
-SEC("uretprobe/hook_app_send_ret")
+SEC("uretprobe/app_send_ret")
 int hook_app_send_ret(struct pt_regs *ctx)
 {
     int64_t retval = (int64_t)PT_REGS_RC(ctx);
@@ -105,7 +105,7 @@ int hook_app_send_ret(struct pt_regs *ctx)
 //   网络收到消息 (rm_on_message) → 路由处理 → 投递到应用 (app_on_message)
 //   app_on_message.time - rm_on_message.time = 路由内部处理耗时
 // ═══════════════════════════════════════════════════════════════════════
-SEC("uprobe/hook_app_on_message")
+SEC("uprobe/app_on_message")
 int hook_app_on_message(struct pt_regs *ctx)
 {
     return submit_app_event(

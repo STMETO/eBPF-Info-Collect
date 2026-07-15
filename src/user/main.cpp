@@ -192,30 +192,32 @@ int main(int argc, char** argv)
     manager.set_event_context(&stats, writer);
 
     // ── 注册收集器（配置驱动）─────────────────────────────────────────
-    // 遍历 modules[]（在 hook_config.h 中自动生成），
-    // 用 --enable / --disable 控制哪些模块被激活。
-    // 新增模块只需修改 hooks.json → 重新 gen_hook_config.sh → 编译，
-    // 不需要改这行代码。
+    // 遍历 file_groups[]，每个分组创建一个 Collector 实例。
+    // 模块名用 bpf_obj 文件名来标识（如 "routing.bpf.o"）。
+    // --enable / --disable 通过文件名的前缀匹配来过滤。
 
     std::string enabled_names;
-    for (int i = 0; i < NUM_MODULES; i++) {
-        const char* mod_name = modules[i].name;
+    for (int i = 0; i < NUM_FILE_GROUPS; i++) {
+        const char* obj_name = file_groups[i].bpf_obj;  // 如 "routing.bpf.o"
+        std::string mod_name(obj_name);
+        // 去掉 ".bpf.o" 后缀作为模块简称（如 "routing"）
+        size_t dot = mod_name.find(".bpf.o");
+        std::string short_name = (dot != std::string::npos)
+            ? mod_name.substr(0, dot) : mod_name;
 
-        // 检查是否需要跳过（--enable 白名单 / --disable 黑名单）
         bool enabled = true;
-
         if (!enable_list.empty()) {
-            enabled = (enable_list.find(mod_name) != std::string::npos);
+            enabled = (enable_list.find(short_name) != std::string::npos);
         }
         if (!disable_list.empty()) {
-            if (disable_list.find(mod_name) != std::string::npos)
+            if (disable_list.find(short_name) != std::string::npos)
                 enabled = false;
         }
 
         if (enabled) {
-            manager.add_collector(new Collector(&modules[i]));
+            manager.add_collector(new Collector(&file_groups[i]));
             if (!enabled_names.empty()) enabled_names += " ";
-            enabled_names += mod_name;
+            enabled_names += short_name;
         }
     }
 

@@ -72,7 +72,7 @@ static __always_inline int submit_routing_event(
 // 这是最核心的 hook，所有消息发送都经过这里。
 // 从 PARM3 (data 指针) + PARM4 (size) 读取完整的 SOME/IP header。
 // ═══════════════════════════════════════════════════════════════════════
-SEC("uprobe/hook_rm_send_entry")
+SEC("uprobe/rm_send_entry")
 int hook_rm_send_entry(struct pt_regs *ctx)
 {
     // ARM32: PT_REGS_PARM1 = r0, PARM2 = r1, PARM3 = r2, PARM4 = r3
@@ -103,7 +103,7 @@ int hook_rm_send_entry(struct pt_regs *ctx)
 //   - 哪次发送失败了（结合 retval 判断失败原因）
 //   - 发送耗时 = send_ret.timestamp - send_entry.timestamp
 // ═══════════════════════════════════════════════════════════════════════
-SEC("uretprobe/hook_rm_send_ret")
+SEC("uretprobe/rm_send_ret")
 int hook_rm_send_ret(struct pt_regs *ctx)
 {
     // PT_REGS_RC(ctx) 获取函数返回值（ARM: r0, ARM64: x0, x86: rax）
@@ -130,7 +130,7 @@ int hook_rm_send_ret(struct pt_regs *ctx)
 // 与 send() 的区别：send_to() 指定了目标端点。
 // 当路由管理器决定把消息发给某个具体 endpoint（TCP/UDP/本地）时调用。
 // ═══════════════════════════════════════════════════════════════════════
-SEC("uprobe/hook_rm_send_to_entry")
+SEC("uprobe/rm_send_to_entry")
 int hook_rm_send_to_entry(struct pt_regs *ctx)
 {
     const unsigned char *data_ptr = (const unsigned char *)PT_REGS_PARM3(ctx);
@@ -150,7 +150,7 @@ int hook_rm_send_to_entry(struct pt_regs *ctx)
 //
 // 捕获端点发送的结果。用户态可以和 send_to_entry 配对计算发送耗时。
 // ═══════════════════════════════════════════════════════════════════════
-SEC("uretprobe/hook_rm_send_to_ret")
+SEC("uretprobe/rm_send_to_ret")
 int hook_rm_send_to_ret(struct pt_regs *ctx)
 {
     int64_t retval = (int64_t)PT_REGS_RC(ctx);
@@ -185,7 +185,7 @@ int hook_rm_send_to_ret(struct pt_regs *ctx)
 //
 //   匹配逻辑在用户态完成（用 service_id + method_id + session_id 做 key）
 // ═══════════════════════════════════════════════════════════════════════
-SEC("uprobe/hook_rm_on_message")
+SEC("uprobe/rm_on_message")
 int hook_rm_on_message(struct pt_regs *ctx)
 {
     const unsigned char *data_ptr = (const unsigned char *)PT_REGS_PARM2(ctx);

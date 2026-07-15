@@ -211,10 +211,9 @@ void CollectorManager::run_loop()
 
 void CollectorManager::handle_collector_event(IUprobeCollector* collector)
 {
-    // ring_buffer__consume() 内部会调用 ringbuf_callback()。
-    // ringbuf_callback 自动把每个事件推给 stats->process_event()
-    // 和 writer->write()，不需要在这里额外处理。
-    (void)collector->poll(0);
+    // ring_buffer__consume() 内部调用 ringbuf_callback()
+    // → stats->process_event() + writer->write()
+    collector->poll(0);
 }
 
 // ═══════════════════════════════════════════════════════════════════════

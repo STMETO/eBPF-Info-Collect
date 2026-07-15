@@ -76,7 +76,7 @@ static __always_inline int submit_sd_event(
 //   两个重载的参数类型不同，内核通过符号表中的 mangled 名区分。
 //   我们只 hook (bool) 版本，因为它是被定时器周期性调用的刷新函数。
 // ═══════════════════════════════════════════════════════════════════════
-SEC("uprobe/hook_sd_send")
+SEC("uprobe/sd_send")
 int hook_sd_send(struct pt_regs *ctx)
 {
     return submit_sd_event(
@@ -107,7 +107,7 @@ int hook_sd_send(struct pt_regs *ctx)
 // 我们抓取 service_id + instance_id + major/minor version，
 // 这些足够在用户态统计"哪些服务被发现"。
 // ═══════════════════════════════════════════════════════════════════════
-SEC("uprobe/hook_sd_process_offer")
+SEC("uprobe/sd_process_offer")
 int hook_sd_process_offer(struct pt_regs *ctx)
 {
     // PARM2 = service_id (uint16_t), PARM3 = instance_id (uint16_t)
@@ -134,7 +134,7 @@ int hook_sd_process_offer(struct pt_regs *ctx)
 // 客户端通过这个函数向服务端发送 SubscribeEventgroup 消息。
 // 抓取 service_id + instance_id + eventgroup_id 用于统计。
 // ═══════════════════════════════════════════════════════════════════════
-SEC("uprobe/hook_sd_send_subscription")
+SEC("uprobe/sd_send_subscription")
 int hook_sd_send_subscription(struct pt_regs *ctx)
 {
     return submit_sd_event(
@@ -163,7 +163,7 @@ int hook_sd_send_subscription(struct pt_regs *ctx)
 // 服务端收到客户端的 SubscribeEventgroup 请求时调用。
 // 与 sd_send_subscription 配对可以追踪订阅时延。
 // ═══════════════════════════════════════════════════════════════════════
-SEC("uprobe/hook_sd_handle_subscription")
+SEC("uprobe/sd_handle_subscription")
 int hook_sd_handle_subscription(struct pt_regs *ctx)
 {
     return submit_sd_event(
