@@ -3,8 +3,8 @@
 #include "routing_collector.h"
 
 extern "C" {
-#include <bpf/libbpf.h>
-#include <bpf/bpf.h>
+    #include <bpf/libbpf.h>
+    #include <bpf/bpf.h>
 }
 
 #include "../../common/vsomeip_event.h"
@@ -21,7 +21,7 @@ RoutingCollector::RoutingCollector() = default;
 RoutingCollector::~RoutingCollector() { destroy(); }
 
 // ═══════════════════════════════════════════════════════════════════════
-// ringbuf_callback — ★ BPF 事件到达时被 libbpf 调用的静态回调
+// ringbuf_callback — BPF 事件到达时被 libbpf 调用的静态回调
 //
 // 这是整个数据流的"桥接点"：
 //   内核态 BPF 在 hook 触发时把 vsomeip_event 推到 ringbuf
@@ -61,7 +61,7 @@ int RoutingCollector::ringbuf_callback(void *ctx, void *data, size_t size)
     const char* hook_name = (event->hook_id < 5)
         ? hook_names[event->hook_id] : "unknown";
 
-    // ★ 关键：把事件推给统计模块和日志模块 ★
+    // 关键：把事件推给统计模块和日志模块 
     // process_event 内部会做：计数器累加 + pending 表更新 + 时延匹配
     self->event_ctx_->stats->process_event(*event, hook_name);
     // write 内部会把事件格式化成人类可读或 JSON 输出
@@ -117,7 +117,6 @@ struct bpf_program* RoutingCollector::find_bpf_program(const char* hook_name)
 // 和之前的区别：ring_buffer__new() 现在传入了 ringbuf_callback 和 this，
 // 这样当事件到达时回调函数会自动被调用，推给 stats 和 log。
 // ═══════════════════════════════════════════════════════════════════════
-
 int RoutingCollector::attach(int target_pid)
 {
     if (!obj_) {
@@ -130,7 +129,11 @@ int RoutingCollector::attach(int target_pid)
     for (const auto* cfg : own_hooks_) {
         struct bpf_program* prog = find_bpf_program(cfg->name);
         if (!prog) continue;
-
+        
+        // 自动创建 struct bpf_uprobe_opts opts; 变量；
+        // 结构体所有字段默认清零（0/NULL）；
+        // 仅覆盖你显式写的 .retprobe = cfg->retprobe，其余字段保持 0；
+        // 兼容 libbpf 高低版本，不会因结构体新增字段出现脏内存、未定义行为
         DECLARE_LIBBPF_OPTS(bpf_uprobe_opts, opts,
             .retprobe = cfg->retprobe,
         );
@@ -144,7 +147,7 @@ int RoutingCollector::attach(int target_pid)
         attached_count++;
     }
 
-    // 创建 ringbuf consumer —— ★ 传入回调函数，事件到达时自动处理
+    // 创建 ringbuf consumer —— 传入回调函数，事件到达时自动处理
     struct bpf_map* rb_map = bpf_object__find_map_by_name(obj_, "routing_events");
     if (!rb_map) {
         fprintf(stderr, "[routing] 找不到 ringbuf map\n");
@@ -152,8 +155,8 @@ int RoutingCollector::attach(int target_pid)
     }
     ringbuf_ = ring_buffer__new(
         bpf_map__fd(rb_map),
-        ringbuf_callback,   // ★ 静态回调：ringbuf_callback(ctx, data, size)
-        this,               // ★ ctx = this，回调内部通过 this 拿到 event_ctx_
+        ringbuf_callback,   // 静态回调：ringbuf_callback(ctx, data, size)
+        this,               // ctx = this  (RoutingCollector*)，回调内部通过 this 拿到 event_ctx_
         nullptr);
     if (!ringbuf_) {
         fprintf(stderr, "[routing] 创建 ring buffer 失败\n");

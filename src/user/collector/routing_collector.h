@@ -7,7 +7,7 @@
 //   BPF uprobe 触发
 //     → ringbuf submit (routing.bpf.c)
 //     → ring_buffer__consume (libbpf)
-//     → ringbuf_callback() ← ★ 静态 C 回调
+//     → ringbuf_callback() ← 静态 C 回调
 //     → ctx->stats->process_event()  +  ctx->writer->write()
 //
 // ringbuf map 名称（在 routing.bpf.c 中定义）：
@@ -49,7 +49,7 @@ private:
     struct bpf_program* find_bpf_program(const char* hook_name);
 
     /**
-     * ★ ringbuf 静态回调函数（C 风格，由 libbpf 调用）
+     * ringbuf 静态回调函数（C 风格，由 libbpf 调用）
      *
      * libbpf 在 ring_buffer__consume() 时，每读到一个事件就调用这个函数。
      *

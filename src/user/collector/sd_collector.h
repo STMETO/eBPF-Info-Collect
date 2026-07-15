@@ -76,7 +76,7 @@ private:
     struct bpf_program* find_bpf_program(const char* hook_name);
 
     /**
-     * ★ ringbuf 事件回调（C 风格，由 libbpf 调用）
+     * ringbuf 事件回调（C 风格，由 libbpf 调用）
      *
      * @param ctx   ring_buffer__new() 时传入的 this 指针
      * @param data  vsomeip_event 数据

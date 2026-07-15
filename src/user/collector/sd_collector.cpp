@@ -75,9 +75,9 @@ int SdCollector::ringbuf_callback(void *ctx, void *data, size_t size)
     const char* hook_name = (event->hook_id < 4)
         ? hook_names[event->hook_id] : "unknown";
 
-    // ★ 推给统计模块（计数器累加，SD 不参与时延匹配因为 header 为 0）
+    // 推给统计模块（计数器累加，SD 不参与时延匹配因为 header 为 0）
     self->event_ctx_->stats->process_event(*event, hook_name);
-    // ★ 推给日志模块（格式化输出）
+    // 推给日志模块（格式化输出）
     self->event_ctx_->writer->write(*event, hook_name);
 
     return 0;
@@ -185,8 +185,8 @@ int SdCollector::attach(int target_pid)
 
     ringbuf_ = ring_buffer__new(
         bpf_map__fd(rb_map),
-        ringbuf_callback,       // ★ 事件回调
-        this,                   // ★ 回调上下文
+        ringbuf_callback,       // 事件回调
+        this,                   // 回调上下文
         nullptr
     );
 
@@ -226,7 +226,6 @@ int SdCollector::detach()
 // ═══════════════════════════════════════════════════════════════════════
 // 其余接口方法
 // ═══════════════════════════════════════════════════════════════════════
-
 void SdCollector::destroy()
 {
     detach();
