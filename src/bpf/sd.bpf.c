@@ -22,7 +22,7 @@
  *   sd_send_subscription   → uprobe  发送 SubscribeEventgroup
  *   sd_handle_subscription → uprobe  处理收到的订阅请求
  *
- * ★ 这 4 个 hook 可以追踪一次完整的 SD 交互：
+ *    这 4 个 hook 可以追踪一次完整的 SD 交互：
  *   客户端：sd_send_subscription → 服务端：sd_handle_subscription
  *   服务端：sd_process_offer ← 客户端的 FindService 请求（由 SD 自动生成）
  */
@@ -70,7 +70,7 @@ static __always_inline int submit_sd_event(
 // 调用 send(bool) 时一次性把所有待发送条目序列化并发送到网络。
 // 这是 SD 消息真正的"出口"。
 //
-// ★ 注意区分：
+// 注意区分：
 //   - service_discovery_impl::send(bool)              ← PARM2 = bool
 //   - service_discovery_impl::send(vector<message>)   ← PARM2 = vector（另一个重载）
 //   两个重载的参数类型不同，内核通过符号表中的 mangled 名区分。
