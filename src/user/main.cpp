@@ -36,12 +36,11 @@
 
 #include "collector/collector_base.h"
 #include "collector/collector_manager.h"
-#include "collector/routing_collector.h"
-#include "collector/app_collector.h"
-#include "collector/sd_collector.h"
+#include "collector/collector.h"
 #include "output/stdout_writer.h"
 #include "output/file_writer.h"
 #include "stats_collector.h"
+#include "../hook_config.h"
 
 // ── 默认配置 ──────────────────────────────────────────────────────────
 static const char* DEFAULT_BPF_DIR = "/usr/lib/ebpf";
@@ -192,34 +191,35 @@ int main(int argc, char** argv)
     //   writer.write()         → 日志输出
     manager.set_event_context(&stats, writer);
 
-    // ── 注册收集器 ───────────────────────────────────────────────────
-    // 三个模块的 collector，可以通过 --enable/--disable 控制
+    // ── 注册收集器（配置驱动）─────────────────────────────────────────
+    // 遍历 modules[]（在 hook_config.h 中自动生成），
+    // 用 --enable / --disable 控制哪些模块被激活。
+    // 新增模块只需修改 hooks.json → 重新 gen_hook_config.sh → 编译，
+    // 不需要改这行代码。
 
-    bool en_routing = true, en_app = true, en_sd = true;
+    std::string enabled_names;
+    for (int i = 0; i < NUM_MODULES; i++) {
+        const char* mod_name = modules[i].name;
 
-    // 解析 --enable（白名单模式）
-    if (!enable_list.empty()) {
-        en_routing = en_app = en_sd = false;  // 默认全关
-        if (enable_list.find("routing") != std::string::npos) en_routing = true;
-        if (enable_list.find("app")     != std::string::npos) en_app = true;
-        if (enable_list.find("sd")      != std::string::npos) en_sd = true;
+        // 检查是否需要跳过（--enable 白名单 / --disable 黑名单）
+        bool enabled = true;
+
+        if (!enable_list.empty()) {
+            enabled = (enable_list.find(mod_name) != std::string::npos);
+        }
+        if (!disable_list.empty()) {
+            if (disable_list.find(mod_name) != std::string::npos)
+                enabled = false;
+        }
+
+        if (enabled) {
+            manager.add_collector(new Collector(&modules[i]));
+            if (!enabled_names.empty()) enabled_names += " ";
+            enabled_names += mod_name;
+        }
     }
 
-    // 解析 --disable（黑名单模式）
-    if (!disable_list.empty()) {
-        if (disable_list.find("routing") != std::string::npos) en_routing = false;
-        if (disable_list.find("app")     != std::string::npos) en_app = false;
-        if (disable_list.find("sd")      != std::string::npos) en_sd = false;
-    }
-
-    if (en_routing) manager.add_collector(new RoutingCollector());
-    if (en_app)     manager.add_collector(new AppCollector());
-    if (en_sd)      manager.add_collector(new SdCollector());
-
-    fprintf(stdout, "启用模块: %s%s%s\n",
-            en_routing ? "routing " : "",
-            en_app     ? "app "     : "",
-            en_sd      ? "sd"       : "");
+    fprintf(stdout, "启用模块: %s\n", enabled_names.c_str());
 
     // ── 初始化所有 collector ─────────────────────────────────────────
     int ok = manager.init_all(bpf_dir.c_str());
