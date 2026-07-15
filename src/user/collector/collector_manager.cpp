@@ -66,24 +66,16 @@ IUprobeCollector* CollectorManager::find(const char* name)
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// init_all — 初始化所有 collector
-//
-// 约定：BPF 对象文件名为 <bpf_dir>/<collector_name>.bpf.o
-// 例如：/usr/lib/ebpf/routing.bpf.o
+// init_all — 初始化所有 collector（BPF 字节码已嵌入，无需文件路径）
 // ═══════════════════════════════════════════════════════════════════════
-int CollectorManager::init_all(const char* bpf_dir)
+int CollectorManager::init_all()
 {
     int success = 0;
 
     for (auto& c : collectors_) {
-        // 构造 BPF 对象文件路径
-        char bpf_path[512];
-        snprintf(bpf_path, sizeof(bpf_path), "%s/%s.bpf.o",
-                 bpf_dir, c->name());
+        fprintf(stdout, "初始化: %s\n", c->name());
 
-        fprintf(stdout, "初始化 %s collector: %s\n", c->name(), bpf_path);
-
-        if (c->init(bpf_path) == 0) {
+        if (c->init() == 0) {
             success++;
         } else {
             fprintf(stderr, "初始化 %s 失败！\n", c->name());

@@ -10,7 +10,7 @@
 // 生命周期：
 //   c = new Collector(&file_groups[i]);
 //   c->set_event_context(&ctx);
-//   c->init(bpf_dir);        // 加载 <bpf_dir>/<file_group->bpf_obj>
+//   c->init();               // 从嵌入字节码加载 BPF
 //   c->attach(pid);          // 遍历 hooks → SEC 名直接查找程序 → 偏移挂载 → 创建 ringbuf
 
 #pragma once
@@ -32,9 +32,9 @@ public:
     explicit Collector(const struct file_group* group);
     ~Collector() override;
 
-    const char* name() const override;          // 返回 bpf_obj 名
+    const char* name() const override;          // 返回逻辑名称，如 "routing"
     void set_event_context(EventContext* ctx) override { event_ctx_ = ctx; }
-    int  init(const char* bpf_dir) override;
+    int  init() override;
     int  attach(int target_pid) override;
     int  detach() override;
     void destroy() override;

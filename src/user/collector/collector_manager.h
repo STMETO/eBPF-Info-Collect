@@ -45,7 +45,7 @@ public:
 
     // ── 生命周期 ─────────────────────────────────────────────────────
 
-    int  init_all(const char* bpf_dir);
+    int  init_all();
 
     /**
      * 挂载所有收集器的 uprobe

@@ -31,8 +31,22 @@
 
 #pragma once
 
-#include <stdint.h>
-#include <stdbool.h>
+// 此文件同时被 BPF C 和用户态 C++ 使用，两边类型来源不同
+#ifdef __BPF__
+    // BPF 环境：vmlinux.h（由 common.bpf.h 先引入）提供了 __u8/__u16 等
+    // 用它们 typedef 出标准 C 类型名，保持 struct 定义一致
+    typedef __u8  uint8_t;
+    typedef __u16 uint16_t;
+    typedef __u32 uint32_t;
+    typedef __u64 uint64_t;
+    typedef __s64 int64_t;
+    // bool 类型由 bpf_helpers.h 提供，这里用 _Bool 替代
+    #define bool _Bool
+#else
+    // 用户态环境：使用标准 C 头文件
+    #include <stdint.h>
+    #include <stdbool.h>
+#endif
 
 // ── 常量定义 ──────────────────────────────────────────────────────────
 #define TASK_COMM_LEN   16    // 进程名最大长度（Linux 内核限制）
@@ -175,9 +189,13 @@ struct vsomeip_event {
 
 // ── 编译期大小检查 ───────────────────────────────────────────────────
 // 确保结构体 ≤ 256 字节，保证能在 ring buffer 的单页（4KB）内高效传输。
-// ring buffer 以页为单位分配，结构体越小，每页能容纳的事件越多，效率越高。
-_Static_assert(sizeof(struct vsomeip_event) <= 256,
-    "vsomeip_event 太大！请检查是否添加了过多字段。ring buffer 要求 ≤ 256 字节");
+#ifdef __cplusplus
+    static_assert(sizeof(struct vsomeip_event) <= 256,
+        "vsomeip_event 太大！请检查是否添加了过多字段。ring buffer 要求 ≤ 256 字节");
+#else
+    _Static_assert(sizeof(struct vsomeip_event) <= 256,
+        "vsomeip_event 太大！请检查是否添加了过多字段。ring buffer 要求 ≤ 256 字节");
+#endif
 
 // ═══════════════════════════════════════════════════════════════════════
 // Hook ID 编号定义（每个模块内部独立编号，从 0 开始）

@@ -33,7 +33,7 @@ Collector::~Collector()
 
 const char* Collector::name() const
 {
-    return group_->bpf_obj;
+    return group_->name;
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -68,25 +68,31 @@ int Collector::ringbuf_callback(void *ctx, void *data, size_t size)
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// init — 加载 BPF 对象
+// init — 从嵌入的字节码加载 BPF 对象
+//
+// ★ 和之前的关键区别：
+//   之前：bpf_object__open("/usr/lib/ebpf/routing.bpf.o") — 读文件
+//   现在：bpf_object__open_mem(group_->embed_data, group_->embed_size, NULL)
+//         — 从编译时嵌入的字节数组加载
+//
+//   优点：只产出一个可执行文件，部署时不需要复制 .bpf.o 到目标机器。
 // ═══════════════════════════════════════════════════════════════════════
 
-int Collector::init(const char* bpf_dir)
+int Collector::init()
 {
-    char bpf_path[512];
-    snprintf(bpf_path, sizeof(bpf_path), "%s/%s", bpf_dir, group_->bpf_obj);
+    fprintf(stdout, "[%s] 初始化 (%d hooks, %u bytes embedded)\n",
+            group_->name, group_->hook_count, group_->embed_size);
 
-    fprintf(stdout, "[%s] 初始化: %s (%d hooks)\n",
-            group_->bpf_obj, bpf_path, group_->hook_count);
-
-    obj_ = bpf_object__open(bpf_path);
+    // bpf_object__open_mem 和 bpf_object__open 的语义完全相同，
+    // 只是数据来源从文件变成了内存中的字节数组。
+    obj_ = bpf_object__open_mem(group_->embed_data, group_->embed_size, NULL);
     if (!obj_) {
-        fprintf(stderr, "[%s] 打开 BPF 对象失败\n", group_->bpf_obj);
+        fprintf(stderr, "[%s] 从嵌入数据打开 BPF 对象失败\n", group_->name);
         return -1;
     }
 
     if (bpf_object__load(obj_) != 0) {
-        fprintf(stderr, "[%s] 加载 BPF 对象失败\n", group_->bpf_obj);
+        fprintf(stderr, "[%s] 加载 BPF 对象失败（verifier 拒绝）\n", group_->name);
         bpf_object__close(obj_);
         obj_ = nullptr;
         return -1;
@@ -107,7 +113,7 @@ int Collector::init(const char* bpf_dir)
 int Collector::attach(int target_pid)
 {
     if (!obj_) {
-        fprintf(stderr, "[%s] 未初始化\n", group_->bpf_obj);
+        fprintf(stderr, "[%s] 未初始化\n", group_->name);
         return -1;
     }
     if (attached_) detach();
@@ -123,7 +129,7 @@ int Collector::attach(int target_pid)
             bpf_object__find_program_by_name(obj_, cfg->name);
         if (!prog) {
             fprintf(stderr, "[%s] 找不到 BPF 程序: %s\n",
-                    group_->bpf_obj, cfg->name);
+                    group_->name, cfg->name);
             continue;
         }
 
@@ -136,7 +142,7 @@ int Collector::attach(int target_pid)
 
         if (!link) {
             fprintf(stderr, "[%s] 挂载失败: %s @ %s+0x%lx\n",
-                    group_->bpf_obj, cfg->name, cfg->target_path,
+                    group_->name, cfg->name, cfg->target_path,
                     (unsigned long)cfg->offset);
             continue;
         }
@@ -150,14 +156,14 @@ int Collector::attach(int target_pid)
         bpf_object__find_map_by_name(obj_, group_->ringbuf_map);
     if (!rb_map) {
         fprintf(stderr, "[%s] 找不到 ringbuf map '%s'\n",
-                group_->bpf_obj, group_->ringbuf_map);
+                group_->name, group_->ringbuf_map);
         return -1;
     }
 
     ringbuf_ = ring_buffer__new(
         bpf_map__fd(rb_map), ringbuf_callback, this, nullptr);
     if (!ringbuf_) {
-        fprintf(stderr, "[%s] 创建 ring buffer 失败\n", group_->bpf_obj);
+        fprintf(stderr, "[%s] 创建 ring buffer 失败\n", group_->name);
         return -1;
     }
 
@@ -165,7 +171,7 @@ int Collector::attach(int target_pid)
     attached_ = true;
 
     fprintf(stdout, "[%s] 挂载完成：%d/%d hooks\n",
-            group_->bpf_obj, ok, group_->hook_count);
+            group_->name, ok, group_->hook_count);
     return ok;
 }
 

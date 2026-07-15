@@ -64,12 +64,12 @@ public:
     virtual void set_event_context(EventContext* ctx) = 0;
 
     /**
-     * 初始化：打开并加载 BPF object
+     * 初始化：从嵌入的字节码加载 BPF object（bpf_object__open_mem）
+     * BPF 字节码在编译时 xxd -i 嵌入到可执行文件中，无需额外文件部署
      *
-     * @param bpf_obj_path  编译好的 .bpf.o 文件路径
      * @return 0=成功, <0=失败
      */
-    virtual int init(const char* bpf_obj_path) = 0;
+    virtual int init() = 0;
 
     /**
      * 挂载所有 uprobe hook

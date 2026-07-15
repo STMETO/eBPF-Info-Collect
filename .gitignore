@@ -27,3 +27,6 @@ compile_commands.json
 
 symbol/
 symbol-offsets/
+embed/
+#脚本生成产物
+embed_data.cpp  

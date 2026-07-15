@@ -43,7 +43,6 @@
 #include "../hook_config.h"
 
 // ── 默认配置 ──────────────────────────────────────────────────────────
-static const char* DEFAULT_BPF_DIR = "/usr/lib/ebpf";
 
 // ── 帮助信息 ──────────────────────────────────────────────────────────
 static void print_help(const char* prog)
@@ -55,7 +54,6 @@ static void print_help(const char* prog)
         "\n"
         "选项:\n"
         "  -p, --pid <PID>        只监控指定 PID（默认: -1 = 所有进程）\n"
-        "  -d, --bpf-dir <DIR>    BPF 对象文件目录（默认: %s）\n"
         "  -o, --output <TYPE>    输出类型: stdout | file | both（默认: stdout）\n"
         "  -f, --log-file <PATH>  日志文件路径\n"
         "  --json                 JSON 格式输出（默认: 人类可读）\n"
@@ -70,7 +68,7 @@ static void print_help(const char* prog)
         "  %s -o file -f /tmp/vsomeip.log      # 日志写入文件\n"
         "  %s --enable routing -s 5 --json     # 只开 routing，JSON 统计\n"
         "\n",
-        prog, DEFAULT_BPF_DIR, prog, prog, prog
+        prog, prog, prog, prog
     );
 }
 
@@ -82,7 +80,6 @@ int main(int argc, char** argv)
     // getopt_long 的长选项定义
     static struct option long_opts[] = {
         {"pid",      required_argument, nullptr, 'p'},
-        {"bpf-dir",  required_argument, nullptr, 'd'},
         {"output",   required_argument, nullptr, 'o'},
         {"log-file", required_argument, nullptr, 'f'},
         {"json",     no_argument,       nullptr, 'j'},
@@ -94,7 +91,6 @@ int main(int argc, char** argv)
         {nullptr,    0,                 nullptr, 0}
     };
 
-    std::string bpf_dir   = DEFAULT_BPF_DIR;
     std::string output    = "stdout";
     std::string log_file;
     std::string enable_list;
@@ -105,13 +101,10 @@ int main(int argc, char** argv)
     bool   verbose        = false;
 
     int opt;
-    while ((opt = getopt_long(argc, argv, "p:d:o:f:s:vh", long_opts, nullptr)) != -1) {
+    while ((opt = getopt_long(argc, argv, "p:o:f:s:vh", long_opts, nullptr)) != -1) {
         switch (opt) {
             case 'p':
                 target_pid = atoi(optarg);
-                break;
-            case 'd':
-                bpf_dir = optarg;
                 break;
             case 'o':
                 output = optarg;
@@ -147,7 +140,7 @@ int main(int argc, char** argv)
     fprintf(stdout, "╔══════════════════════════════════════════════╗\n");
     fprintf(stdout, "║  vsomeip collector — eBPF uprobe monitor    ║\n");
     fprintf(stdout, "╠══════════════════════════════════════════════╣\n");
-    fprintf(stdout, "║  BPF dir : %-32s ║\n", bpf_dir.c_str());
+    fprintf(stdout, "║  BPF     : 嵌入编译（无需外部文件）        ║\n");
     fprintf(stdout, "║  Target  : %s%-32s ║\n",
             target_pid < 0 ? "所有进程" : "PID ",
             target_pid < 0 ? "" : std::to_string(target_pid).c_str());
@@ -193,41 +186,35 @@ int main(int argc, char** argv)
 
     // ── 注册收集器（配置驱动）─────────────────────────────────────────
     // 遍历 file_groups[]，每个分组创建一个 Collector 实例。
-    // 模块名用 bpf_obj 文件名来标识（如 "routing.bpf.o"）。
+    // 模块名用 file_group 的逻辑名称来标识（如 "routing"）。
     // --enable / --disable 通过文件名的前缀匹配来过滤。
 
     std::string enabled_names;
     for (int i = 0; i < NUM_FILE_GROUPS; i++) {
-        const char* obj_name = file_groups[i].bpf_obj;  // 如 "routing.bpf.o"
-        std::string mod_name(obj_name);
-        // 去掉 ".bpf.o" 后缀作为模块简称（如 "routing"）
-        size_t dot = mod_name.find(".bpf.o");
-        std::string short_name = (dot != std::string::npos)
-            ? mod_name.substr(0, dot) : mod_name;
+        const char* mod_name = file_groups[i].name;  // 如 "routing"
 
         bool enabled = true;
         if (!enable_list.empty()) {
-            enabled = (enable_list.find(short_name) != std::string::npos);
+            enabled = (enable_list.find(mod_name) != std::string::npos);
         }
         if (!disable_list.empty()) {
-            if (disable_list.find(short_name) != std::string::npos)
+            if (disable_list.find(mod_name) != std::string::npos)
                 enabled = false;
         }
 
         if (enabled) {
             manager.add_collector(new Collector(&file_groups[i]));
             if (!enabled_names.empty()) enabled_names += " ";
-            enabled_names += short_name;
+            enabled_names += mod_name;
         }
     }
 
     fprintf(stdout, "启用模块: %s\n", enabled_names.c_str());
 
-    // ── 初始化所有 collector ─────────────────────────────────────────
-    int ok = manager.init_all(bpf_dir.c_str());
+    // ── 初始化所有 collector（BPF 字节码已嵌入，无需外部文件）────────
+    int ok = manager.init_all();
     if (ok == 0) {
-        fprintf(stderr, "错误：没有 collector 初始化成功，检查 BPF 文件是否在 %s/\n",
-                bpf_dir.c_str());
+        fprintf(stderr, "错误：没有 collector 初始化成功\n");
         return 1;
     }
 
