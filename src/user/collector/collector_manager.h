@@ -28,12 +28,10 @@
 
 #pragma once
 
+#include "collector_base.h"
 #include <vector>
 #include <memory>
 #include <string>
-
-class IUprobeCollector;
-class ILogWriter;
 
 class CollectorManager {
 public:
@@ -42,61 +40,39 @@ public:
 
     // ── 收集器注册 ───────────────────────────────────────────────────
 
-    /**
-     * 注册一个收集器（必须在 init_all 之前调用）
-     * CollectorManager 接管所有权
-     */
     void add_collector(IUprobeCollector* collector);
-
-    /**
-     * 按名称查找收集器（用于运行时控制）
-     * @return 找到的 collector 指针，不存在返回 nullptr
-     */
     IUprobeCollector* find(const char* name);
 
     // ── 生命周期 ─────────────────────────────────────────────────────
 
-    /**
-     * 初始化所有已注册的收集器
-     *
-     * @param bpf_dir  存放 .bpf.o 文件的目录
-     *                 每个 collector 会加载 <bpf_dir>/<name>.bpf.o
-     *                 例如 routing collector 加载 <bpf_dir>/routing.bpf.o
-     * @return 成功初始化的 collector 数量
-     */
-    int init_all(const char* bpf_dir);
+    int  init_all(const char* bpf_dir);
 
     /**
      * 挂载所有收集器的 uprobe
-     * @param target_pid  目标进程 PID（-1 = 所有进程）
+     *
+     * 挂载前会把 EventContext（stats + writer）注入到每个 collector，
+     * 确保 ringbuf 回调函数能把事件推给统计和日志模块。
      */
     void attach_all(int target_pid);
 
     // ── 事件循环 ─────────────────────────────────────────────────────
 
-    /**
-     * 进入主事件循环（阻塞，直到收到停止信号）
-     *
-     * 内部使用 epoll_wait 等待任意 collector 的 ringbuf 有数据，
-     * 然后调用对应 collector 的 poll() 消费事件。
-     */
     void run_loop();
-
-    /**
-     * 停止事件循环（可从信号处理函数中调用）
-     */
     void stop();
 
     // ── 日志和统计 ───────────────────────────────────────────────────
 
-    /**
-     * 设置日志输出（所有 collector 共享）
-     */
     void set_log_writer(ILogWriter* writer);
 
     /**
-     * 设置统计输出间隔（秒），0 = 关闭统计
+     * 设置事件处理上下文（stats + writer）
+     *
+     * 必须在 attach_all() 之前调用。
+     * attach_all() 内部会把 EventContext 注入到每个 collector，
+     * collector 的 ringbuf 回调函数通过 EventContext 把事件
+     * 推给 stats_collector（做统计和时延匹配）和 log_writer（做日志输出）。
      */
+    void set_event_context(StatsCollector* stats, ILogWriter* writer);
     void set_stats_interval(int seconds);
 
     // ── 清理 ─────────────────────────────────────────────────────────
@@ -121,6 +97,7 @@ private:
     std::vector<std::unique_ptr<IUprobeCollector>> collectors_;
     ILogWriter* log_writer_ = nullptr;
     int  epoll_fd_ = -1;
-    int  stats_interval_sec_ = 10;   // 默认每 10 秒输出一次统计
+    EventContext event_ctx_ = {};       // 事件上下文（stats + writer）
+    int  stats_interval_sec_ = 10;
     bool running_ = false;
 };

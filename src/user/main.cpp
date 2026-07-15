@@ -34,6 +34,7 @@
 #include <getopt.h>
 #include <unistd.h>
 
+#include "collector/collector_base.h"
 #include "collector/collector_manager.h"
 #include "collector/routing_collector.h"
 #include "collector/app_collector.h"
@@ -174,8 +175,22 @@ int main(int argc, char** argv)
 
     // ── 创建收集器管理器 ─────────────────────────────────────────────
     CollectorManager manager;
-    manager.set_log_writer(writer);
     manager.set_stats_interval(stats_interval);
+
+    // ── 创建统计收集器 ───────────────────────────────────────────────
+    // 统计数据在 ringbuf 回调中实时更新，不是定时采集。
+    // flush_report() 只是定时把累计值输出成 [STATS] 日志行。
+    StatsCollector stats;
+    stats.set_log_writer(writer);
+    stats.set_report_interval(stats_interval);
+
+    // ── 核心接线：把 stats + writer 注入 CollectorManager ──────────
+    // CollectorManager 在 attach_all() 时会把 EventContext 传给每个 collector，
+    // collector 创建 ringbuf 时把回调函数注册进去。
+    // 之后每次 BPF 事件到达，回调函数自动调用：
+    //   stats.process_event()  → 计数器 + 时延匹配
+    //   writer.write()         → 日志输出
+    manager.set_event_context(&stats, writer);
 
     // ── 注册收集器 ───────────────────────────────────────────────────
     // 三个模块的 collector，可以通过 --enable/--disable 控制
@@ -205,11 +220,6 @@ int main(int argc, char** argv)
             en_routing ? "routing " : "",
             en_app     ? "app "     : "",
             en_sd      ? "sd"       : "");
-
-    // ── 创建统计收集器 ───────────────────────────────────────────────
-    StatsCollector stats;
-    stats.set_log_writer(writer);
-    stats.set_report_interval(stats_interval);
 
     // ── 初始化所有 collector ─────────────────────────────────────────
     int ok = manager.init_all(bpf_dir.c_str());

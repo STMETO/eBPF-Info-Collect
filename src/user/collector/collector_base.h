@@ -11,22 +11,38 @@
 
 #pragma once
 
-#include <string>
 #include <cstdint>
 
 struct vsomeip_event;       // 前向声明，定义在 common/vsomeip_event.h
+class  StatsCollector;      // 前向声明，定义在 user/stats_collector.h
+class  ILogWriter;          // 前向声明，定义在 user/output/log_writer.h
+
+// ── 事件处理上下文 ────────────────────────────────────────────────────
+// 每个 collector 在创建 ringbuf 时都会持有这个结构体的指针。
+// 当 ringbuf 中有新事件到达时，libbpf 调用静态回调函数，
+// 回调函数通过这个上下文把事件推给统计模块和日志模块。
+//
+// 为什么用结构体而不是直接传两个裸指针？
+//   1. collector 不需要知道 StatsCollector/ILogWriter 的具体实现
+//   2. 未来可能添加更多消费者（如网络上报、DDS 桥接），只需扩展这个结构体
+
+struct EventContext {
+    StatsCollector* stats;      // 统计收集器（计数器 + 时延匹配）
+    ILogWriter*     writer;     // 日志输出（终端 / 文件）
+};
 
 /**
  * IUprobeCollector — 一个 uprobe 模块的抽象接口
  *
  * 生命周期：
  *   1. collector = new RoutingCollector();
- *   2. collector->init(bpf_obj_path);     // 加载 BPF skeleton
- *   3. collector->attach(target_pid);     // 遍历 hooks 数组，逐个挂载 uprobe
- *   4. collector->ringbuf_fd();           // 获取 ringbuf fd，注册到 epoll
- *   5. epoll_wait() → collector->poll();   // 有数据时调用 poll() 消费
- *   6. collector->detach();               // 销毁所有 bpf_link（可重新 attach）
- *   7. collector->destroy();              // 完全释放资源
+ *   2. collector->set_event_context(&ctx);   // 注入事件处理上下文
+ *   3. collector->init(bpf_obj_path);        // 加载 BPF object
+ *   4. collector->attach(target_pid);        // 遍历 hooks 数组，逐个挂载 uprobe
+ *   5. collector->ringbuf_fd();              // 获取 ringbuf fd，注册到 epoll
+ *   6. epoll_wait() → collector->poll();      // 有数据时调用 poll() 消费
+ *   7. collector->detach();                  // 销毁所有 bpf_link（可重新 attach）
+ *   8. collector->destroy();                 // 完全释放资源
  */
 class IUprobeCollector {
 public:
@@ -34,15 +50,23 @@ public:
 
     /**
      * 获取收集器名称（如 "routing", "app", "sd"）
-     * 用于日志标识和 CLI 启停控制
      */
     virtual const char* name() const = 0;
 
     /**
-     * 初始化：打开并加载 BPF skeleton
+     * 注入事件处理上下文（stats + writer）
+     *
+     * 必须在 attach() 之前调用，因为 attach() 中创建 ringbuf consumer
+     * 时就需要把这个上下文传给 libbpf 的回调函数。
+     *
+     * @param ctx  包含 stats 和 writer 指针的结构体
+     */
+    virtual void set_event_context(EventContext* ctx) = 0;
+
+    /**
+     * 初始化：打开并加载 BPF object
      *
      * @param bpf_obj_path  编译好的 .bpf.o 文件路径
-     *                      例如 "/usr/lib/ebpf/routing.bpf.o"
      * @return 0=成功, <0=失败
      */
     virtual int init(const char* bpf_obj_path) = 0;
@@ -53,55 +77,31 @@ public:
      * 遍历 hook_configs[] 数组中属于本模块的条目，
      * 用 bpf_program__attach_uprobe_opts() 按偏移量挂载。
      *
-     * @param target_pid  目标进程 PID
-     *                    -1 = 所有进程
-     *                     0 = 自身
-     *                    >0 = 指定 PID
+     * @param target_pid  目标进程 PID（-1 = 所有进程）
      * @return 成功挂载的 hook 数量，<0=失败
      */
     virtual int attach(int target_pid) = 0;
 
     /**
      * 卸载所有 uprobe hook（销毁 bpf_link）
-     *
-     * detach 后可以再次 attach，用于运行时切换目标进程
-     * @return 0=成功
      */
     virtual int detach() = 0;
 
     /**
-     * 完全释放资源（skeleton、ringbuf、links）
-     * 调用后 collector 不可再使用
+     * 完全释放资源
      */
     virtual void destroy() = 0;
 
     /**
-     * 获取 ringbuffer 的文件描述符
-     *
-     * CollectorManager 把这个 fd 注册到 epoll，
-     * 当 ringbuf 有数据可读时，epoll_wait 返回，
-     * 然后调用 poll() 消费数据。
+     * 获取 ringbuffer 的 epoll fd
      */
     virtual int ringbuf_fd() const = 0;
 
     /**
-     * 消费 ringbuffer 中的事件
-     *
-     * 每收到一个事件，调用 event_callback 处理。
-     * event_callback 由 CollectorManager 注入（指向 stats_collector + log_writer）。
-     *
-     * @param timeout_ms  最大等待时间（毫秒），-1=阻塞等待
-     * @return 本轮消费的事件数量
+     * 消费 ringbuffer 中的事件（由 epoll 唤醒后调用）
      */
     virtual int poll(int timeout_ms) = 0;
 
-    /**
-     * 获取本模块的 hook 数量（来自 hook_configs[]）
-     */
-    virtual int hook_count() const = 0;
-
-    /**
-     * 是否已挂载
-     */
+    virtual int  hook_count() const = 0;
     virtual bool is_attached() const = 0;
 };

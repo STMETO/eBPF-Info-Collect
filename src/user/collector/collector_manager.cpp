@@ -1,8 +1,8 @@
 // collector_manager.cpp — 收集器管理器的实现
 
 #include "collector_manager.h"
-#include "collector_base.h"
 #include "../output/log_writer.h"
+#include "../stats_collector.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -71,7 +71,6 @@ IUprobeCollector* CollectorManager::find(const char* name)
 // 约定：BPF 对象文件名为 <bpf_dir>/<collector_name>.bpf.o
 // 例如：/usr/lib/ebpf/routing.bpf.o
 // ═══════════════════════════════════════════════════════════════════════
-
 int CollectorManager::init_all(const char* bpf_dir)
 {
     int success = 0;
@@ -95,18 +94,37 @@ int CollectorManager::init_all(const char* bpf_dir)
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// attach_all — 挂载所有收集器
+// attach_all — 注入 EventContext 后挂载所有收集器
+//
+// 关键流程：
+//   1. set_event_context(&event_ctx_) → 把 stats + writer 注入每个 collector
+//   2. collector->attach() → 创建 ringbuf consumer 时，
+//      把 ringbuf_callback + this 传给 ring_buffer__new()
+//   3. 之后每次 ring_buffer__consume() 读出事件，
+//      ringbuf_callback 自动把事件推给 stats 和 writer
 // ═══════════════════════════════════════════════════════════════════════
-
 void CollectorManager::attach_all(int target_pid)
 {
     for (auto& c : collectors_) {
+        // 注入事件上下文：让 collector 的 ringbuf 回调知道往哪推事件
+        c->set_event_context(&event_ctx_);
+
         int n = c->attach(target_pid);
         if (n > 0) {
             fprintf(stdout, "%s: %d/%d hooks 挂载成功\n",
                     c->name(), n, c->hook_count());
         }
     }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// set_event_context — 设置 EventContext
+// ═══════════════════════════════════════════════════════════════════════
+
+void CollectorManager::set_event_context(StatsCollector* stats, ILogWriter* writer)
+{
+    event_ctx_.stats  = stats;
+    event_ctx_.writer = writer;
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -193,13 +211,10 @@ void CollectorManager::run_loop()
 
 void CollectorManager::handle_collector_event(IUprobeCollector* collector)
 {
-    // 当前版本：直接消费 ringbuf（不阻塞）
-    // 后续改进：在 ring_buffer__new 时注册回调函数，
-    // 把 vsomeip_event 推给 stats_collector 和 log_writer。
-    int count = collector->poll(0);
-
-    // TODO: count 里的事件会通过 ringbuf 回调逐个处理
-    (void)count;
+    // ring_buffer__consume() 内部会调用 ringbuf_callback()。
+    // ringbuf_callback 自动把每个事件推给 stats->process_event()
+    // 和 writer->write()，不需要在这里额外处理。
+    (void)collector->poll(0);
 }
 
 // ═══════════════════════════════════════════════════════════════════════
