@@ -3,10 +3,6 @@
 #pragma once
 
 #include "log_writer.h"
-#include "../../common/event_header.h"
-#include "../../common/routing_event.h"
-#include "../../common/app_event.h"
-#include "../../common/sd_event.h"
 #include <cstdio>
 #include <string>
 
@@ -14,9 +10,9 @@ class FileWriter : public ILogWriter {
 public:
     FileWriter(const char* path, bool json = true);
     ~FileWriter() override;
-    void write_routing(const routing_event& e, const char* hook) override;
-    void write_app(const app_event& e, const char* hook) override;
-    void write_sd(const sd_event& e, const char* hook) override;
+    void write_event(const event_header* hdr, const void* payload,
+                     const char* hook,
+                     void (*on_payload)(const void*, const char*, char*, size_t)) override;
     void write_stats(const char* line) override;
     void write_latency(const char* line) override;
     void flush() override;
@@ -24,8 +20,6 @@ public:
 
 private:
     bool ensure_open();
-    void write_common_json(const event_header& h, const char* hook, FILE* f);
-
     std::string path_;
     FILE* file_ = nullptr;
     bool use_json_;
