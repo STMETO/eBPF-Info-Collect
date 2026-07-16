@@ -15,7 +15,4 @@ struct sd_event {
     uint32_t ttl;                   // 生存时间
 };
 
-#define HOOK_SD_SEND            0
-#define HOOK_SD_PROCESS_OFFER   1
-#define HOOK_SD_SEND_SUB        2
-#define HOOK_SD_HANDLE_SUB      3
+// hook_id 见 common/hook_ids.h（由 gen_hook_config.sh 自动生成）

@@ -26,9 +26,4 @@ struct routing_event {
     int64_t retval;                 // 仅 uretprobe 有效
 };
 
-// routing 模块的 hook_id 定义
-#define HOOK_RM_SEND_ENTRY      0
-#define HOOK_RM_SEND_RET        1
-#define HOOK_RM_SEND_TO_ENTRY   2
-#define HOOK_RM_SEND_TO_RET     3
-#define HOOK_RM_ON_MESSAGE      4
+// hook_id 见 common/hook_ids.h（由 gen_hook_config.sh 自动生成）

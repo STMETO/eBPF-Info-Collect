@@ -4,6 +4,7 @@
 
 #include "common.bpf.h"
 #include "../common/sd_event.h"
+#include "../common/hook_ids.h"
 
 char LICENSE[] SEC("license") = "GPL";
 
@@ -40,14 +41,14 @@ int hook_sd_process_offer(struct pt_regs *ctx) {
 
 SEC("uprobe/sd_send_subscription")
 int hook_sd_send_subscription(struct pt_regs *ctx) {
-    return submit_sd(ctx, HOOK_SD_SEND_SUB, DIR_SEND,
+    return submit_sd(ctx, HOOK_SD_SEND_SUBSCRIPTION, DIR_SEND,
         (uint16_t)PT_REGS_PARM3(ctx), (uint16_t)PT_REGS_PARM4(ctx),
         (uint16_t)PT_REGS_PARM5(ctx));
 }
 
 SEC("uprobe/sd_handle_subscription")
 int hook_sd_handle_subscription(struct pt_regs *ctx) {
-    return submit_sd(ctx, HOOK_SD_HANDLE_SUB, DIR_RECV,
+    return submit_sd(ctx, HOOK_SD_HANDLE_SUBSCRIPTION, DIR_RECV,
         (uint16_t)PT_REGS_PARM2(ctx), (uint16_t)PT_REGS_PARM3(ctx),
         (uint16_t)PT_REGS_PARM4(ctx));
 }

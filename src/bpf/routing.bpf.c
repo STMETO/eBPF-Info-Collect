@@ -6,6 +6,7 @@
 
 #include "common.bpf.h"
 #include "../common/routing_event.h"
+#include "../common/hook_ids.h"
 
 char LICENSE[] SEC("license") = "GPL";
 

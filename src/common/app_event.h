@@ -16,6 +16,4 @@ struct app_event {
     int64_t  retval;                // 仅 uretprobe 有效
 };
 
-#define HOOK_APP_SEND_ENTRY     0
-#define HOOK_APP_SEND_RET       1
-#define HOOK_APP_ON_MESSAGE     2
+// hook_id 见 common/hook_ids.h（由 gen_hook_config.sh 自动生成）
