@@ -13,11 +13,11 @@ StdoutWriter::StdoutWriter(bool json) : use_json_(json) {
 }
 
 // ── 通用 write_event ─────────────────────────────────────────────────
-// 公共部分永远不变；payload 部分通过 on_payload 回调让模块自己格式化
+// 公共部分永远不变；payload 部分通过 format_payload 回调让模块自己格式化
 
 void StdoutWriter::write_event(const event_header* hdr, const void* payload,
                                 const char* hook,
-                                void (*on_payload)(const void*, const char*, char*, size_t))
+                                format_callback_t format_payload)
 {
     const char* tag = hdr->module_id == MODULE_ROUTING ? "\033[31m[R]\033[0m" :
                       hdr->module_id == MODULE_APP     ? "\033[32m[A]\033[0m" :
@@ -33,9 +33,9 @@ void StdoutWriter::write_event(const event_header* hdr, const void* payload,
                 hook, dir, hdr->is_retprobe ? "true" : "false");
 
         // 模块特定字段（JSON）
-        if (on_payload) {
+        if (format_payload) {
             char buf[512] = {};
-            on_payload(payload, hook, buf, sizeof(buf));
+            format_payload(payload, hook, buf, sizeof(buf));
             if (buf[0]) fprintf(stdout, ",%s", buf);
         }
         fprintf(stdout, "}\n");
@@ -48,9 +48,9 @@ void StdoutWriter::write_event(const event_header* hdr, const void* payload,
                 tag, tb, ns/1000L, hdr->pid, hdr->tid, hdr->comm, hook, ret, dir);
 
         // 模块特定字段（人类可读）
-        if (on_payload) {
+        if (format_payload) {
             char buf[256] = {};
-            on_payload(payload, hook, buf, sizeof(buf));
+            format_payload(payload, hook, buf, sizeof(buf));
             if (buf[0]) fprintf(stdout, "  %s\n", buf);
         }
     }

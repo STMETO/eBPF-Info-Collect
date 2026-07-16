@@ -56,7 +56,7 @@ static void on_latency(const void* data, const char* /*hook*/, StatsCollector* s
     }
 }
 
-// ── ★ 被 collector.cpp 调用的统一入口 ★ ───────────────────────────────
+// ── 被 collector.cpp 调用的统一入口  ───────────────────────────────
 
 extern "C"
 void routing_event_handler(const void *data, const char *hook,

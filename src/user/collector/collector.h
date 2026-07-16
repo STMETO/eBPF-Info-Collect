@@ -32,7 +32,7 @@ public:
     ~Collector() override;
 
     const char* name() const override;          // 返回逻辑名称，如 "routing"
-    void set_event_context(EventContext* ctx) override { event_ctx_ = ctx; }
+    void set_event_context(EventContext* ctx) override { event_ctx_ = ctx; }    // 已经实现
     int  init() override;
     int  attach(int target_pid) override;
     int  detach() override;

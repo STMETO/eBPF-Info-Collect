@@ -15,7 +15,7 @@ struct {
     __uint(max_entries, 128 * 1024);
 } app_events SEC(".maps");
 
-// ── 通用提交 ─────────────────────────────────────────────────────────
+
 static __always_inline int submit_app(void *ctx,
     uint8_t hook_id, uint8_t dir, bool is_ret,
     uint64_t this_ptr, uint64_t msg_ptr, int64_t retval)

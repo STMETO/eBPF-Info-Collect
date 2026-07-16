@@ -4,7 +4,7 @@
 //   init() → attach() → poll() → detach() → destroy()
 //
 // 设计思路：
-//   每个 collector 拥有自己独立的 BPF skeleton 和 ringbuffer。
+//   每个 collector 拥有自己独立的ringbuffer。
 //   CollectorManager 用 epoll 多路复用所有 collector 的 ringbuf fd，
 //   哪个有数据就调用哪个的 poll()，以此实现非阻塞的并发事件消费。
 

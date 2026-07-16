@@ -10,7 +10,7 @@ public:
     explicit StdoutWriter(bool use_json = false);
     void write_event(const event_header* hdr, const void* payload,
                      const char* hook,
-                     void (*on_payload)(const void*, const char*, char*, size_t)) override;
+                     format_callback_t format_payload) override;
     void write_stats(const char* line) override;
     void write_latency(const char* line) override;
     void flush() override;

@@ -12,7 +12,7 @@ void FileWriter::flush() { if (file_) fflush(file_); }
 
 void FileWriter::write_event(const event_header* hdr, const void* payload,
                               const char* hook,
-                              void (*on_payload)(const void*, const char*, char*, size_t))
+                              format_callback_t format_payload)
 {
     if (!ensure_open()) return;
 
@@ -22,9 +22,9 @@ void FileWriter::write_event(const event_header* hdr, const void* payload,
             hdr->module_id == 1 ? "routing" : hdr->module_id == 2 ? "app" : hdr->module_id == 3 ? "sd" : "?",
             hook, hdr->direction == DIR_SEND ? "SEND" : "RECV", hdr->is_retprobe ? "true" : "false");
 
-    if (on_payload) {
+    if (format_payload) {
         char buf[512] = {};
-        on_payload(payload, hook, buf, sizeof(buf));
+        format_payload(payload, hook, buf, sizeof(buf));
         if (buf[0]) fprintf(file_, ",%s", buf);
     }
     fprintf(file_, "}\n");

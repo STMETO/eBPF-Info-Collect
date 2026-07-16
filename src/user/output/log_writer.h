@@ -7,6 +7,10 @@
 
 struct event_header;
 
+// 模块自定义格式化回调（负责输出模块特有的 payload 字段）
+typedef void (*format_callback_t)(const void* payload, const char* hook,
+                                   char* buf, size_t size);
+
 class ILogWriter {
 public:
     virtual ~ILogWriter() = default;
@@ -26,8 +30,7 @@ public:
      */
     virtual void write_event(const event_header* hdr, const void* payload,
                              const char* hook,
-                             void (*on_payload)(const void* payload, const char* hook,
-                                                char* buf, size_t size)) = 0;
+                             format_callback_t format_payload) = 0;
 
     virtual void write_stats(const char* line) = 0;
     virtual void write_latency(const char* line) = 0;

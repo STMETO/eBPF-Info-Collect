@@ -1,4 +1,4 @@
-// stats_collector.h — 统计收集（★ 解耦后只有通用入口）
+// stats_collector.h — 统计收集
 
 #pragma once
 
@@ -19,7 +19,7 @@ public:
     void set_log_writer(ILogWriter* w) { log_writer_ = w; }
     void set_report_interval(int sec) { report_interval_sec_ = sec; }
 
-    // ── 通用事件处理（新增模块不需加方法）─────────────────────────
+    // ── 通用事件处理─────────────────────────
     //
     // 处理 event_header 能覆盖的所有逻辑：
     //   - 计数器（total/succ/fail）
@@ -27,9 +27,9 @@ public:
     //
     // 类型相关的逻辑（时延匹配）通过 on_latency 回调完成。
     // routing 模块的 handler 调用时传 latency 回调，其他模块传 nullptr。
-
-    typedef void (*on_latency_fn)(const void* data, const char* hook,
-                                   StatsCollector* self);
+    // 模块自定义统计回调（如时延匹配、自定义计数器等）
+    typedef void (*stats_callback_t)(const void* data, const char* hook,
+                                      StatsCollector* self);
 
     /**
      * @param hdr         公共头
@@ -40,11 +40,12 @@ public:
      */
     void process_event(const event_header* hdr, const void* payload,
                        const char* hook, int64_t retval,
-                       on_latency_fn on_latency);
+                       stats_callback_t on_latency);
 
     // ── 时延匹配（被 routing handler 的回调调用）─────────────────────
     void record_pending(uint16_t svc, uint16_t method,
                         uint16_t client, uint16_t session, uint64_t ts);
+                        
     void try_match(uint16_t svc, uint16_t method,
                    uint16_t client, uint16_t session,
                    uint64_t recv_ts, uint8_t msg_type);

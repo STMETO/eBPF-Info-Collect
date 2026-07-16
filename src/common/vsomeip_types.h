@@ -75,7 +75,7 @@
 //   [10:11]    Session ID         2 字节   会话标识 ★ 时延匹配的核心 key 之一
 //   [12]       Protocol Version   1 字节   协议主版本（通常为 1）
 //   [13]       Interface Version  1 字节   服务接口版本
-//   [14]       Message Type       1 字节   ★ 消息类型（见第 1 组定义）
+//   [14]       Message Type       1 字节   消息类型（见第 1 组定义）
 //   [15]       Return Code        1 字节   返回码（见第 2 组定义）
 //
 // 这些偏移量在 BPF 代码中用于 read_someip_header() 函数

@@ -32,7 +32,6 @@ static void signal_handler(int sig)
 // ═══════════════════════════════════════════════════════════════════════
 // 构造 / 析构
 // ═══════════════════════════════════════════════════════════════════════
-
 CollectorManager::CollectorManager()
 {
     // 安装信号处理函数
@@ -130,7 +129,6 @@ void CollectorManager::set_event_context(StatsCollector* stats, ILogWriter* writ
 //      d) 如果是统计数据事件，输出统计报告
 //   4. 收到停止信号后清理退出
 // ═══════════════════════════════════════════════════════════════════════
-
 void CollectorManager::run_loop()
 {
     // 步骤 1：创建 epoll 实例
@@ -209,7 +207,6 @@ void CollectorManager::handle_collector_event(IUprobeCollector* collector)
 // ═══════════════════════════════════════════════════════════════════════
 // 辅助方法
 // ═══════════════════════════════════════════════════════════════════════
-
 void CollectorManager::stop()
 {
     g_running = 0;
@@ -228,7 +225,6 @@ void CollectorManager::set_stats_interval(int seconds)
 // ═══════════════════════════════════════════════════════════════════════
 // shutdown — 清理所有资源
 // ═══════════════════════════════════════════════════════════════════════
-
 void CollectorManager::shutdown()
 {
     if (epoll_fd_ >= 0) {
