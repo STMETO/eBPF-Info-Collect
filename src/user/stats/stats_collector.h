@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include "../../gen/hook_config.h"
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -55,7 +56,8 @@ public:
 private:
     struct HookStats { uint64_t total=0,succ=0,fail=0; };
     std::unordered_map<std::string,HookStats> hook_stats_;
-    uint64_t mod_send_[4]={}, mod_recv_[4]={};
+    uint64_t mod_send_[MAX_MODULE_ID + 1] = {};
+    uint64_t mod_recv_[MAX_MODULE_ID + 1] = {};
 
     struct PendingEntry { uint64_t send_ts; };
     std::unordered_map<uint64_t,PendingEntry> pending_;

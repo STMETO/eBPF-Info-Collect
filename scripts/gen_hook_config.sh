@@ -146,6 +146,8 @@ for fg,arr,narr,hc in gi:
     n = fg["name"]
     print(f'    {{"{n}",{n}_bpf_o,{n}_bpf_o_len,"{fg["ringbuf_map"]}",{fg["module_id"]},{hc},{arr},{narr},{n}_event_handler}},')
 print("};")
+max_mod = max(fg["module_id"] for fg in files)
+print(f"#define MAX_MODULE_ID  {max_mod}")
 print(f"#define NUM_FILE_GROUPS {len(files)}")
 print(f"#define TOTAL_HOOKS {total}")
 print(f"// Generated: {total} hooks, {len(files)} file groups")

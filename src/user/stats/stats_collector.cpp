@@ -11,9 +11,7 @@
 static const uint64_t TIMEOUT_NS = 30ULL*1000*1000*1000;
 
 StatsCollector::StatsCollector()  { 
-    for(int i=0;i<4;i++){
-        mod_send_[i]=mod_recv_[i]=0;
-    } 
+    for(int i=0; i<=MAX_MODULE_ID; i++) mod_send_[i]=mod_recv_[i]=0;
 }
 
 StatsCollector::~StatsCollector() = default;
@@ -101,11 +99,15 @@ void StatsCollector::flush_report()
     if(!log_writer_)
         return;
 
-    for(int m=1;m<=3;m++){
+    for(int m=1; m<=MAX_MODULE_ID; m++){
         if(!mod_send_[m]&&!mod_recv_[m])
             continue;
-        
-        const char* nm=m==1?"routing":m==2?"app":"sd";
+
+        // 从 file_groups 查模块名（配置驱动，不改代码）
+        const char* nm = "?";
+        for(int f=0; f<NUM_FILE_GROUPS; f++)
+            if(file_groups[f].module_id == m) { nm = file_groups[f].name; break; }
+
         char b[256];snprintf(b,sizeof(b),"{\"module\":\"%s\",\"elapsed\":%.1f,\"send\":%" PRIu64 ",\"recv\":%" PRIu64 "}",nm,elapse,mod_send_[m],mod_recv_[m]);
         log_writer_->write_stats(b);mod_send_[m]=mod_recv_[m]=0;
     }
