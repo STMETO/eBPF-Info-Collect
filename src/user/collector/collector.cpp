@@ -9,14 +9,8 @@ extern "C" {
 #include <bpf/bpf.h>
 }
 
-#include "../../common/vsomeip_types.h"
-#include "../../common/event_header.h"
-#include "../../common/routing_event.h"
-#include "../../common/app_event.h"
-#include "../../common/sd_event.h"
-#include "../../hook_config.h"
-#include "../stats_collector.h"
-#include "../output/log_writer.h"
+#include "../../common/event_header.h"   // 仅用于 sizeof 检查
+#include "../../hook_config.h"            // file_group + handler 指针
 
 #include <cstdio>
 #include <cstring>
@@ -47,33 +41,12 @@ int Collector::ringbuf_callback(void *ctx, void *data, size_t size)
     if (hdr->hook_id < self->group_->hook_count)
         hook_name = self->group_->hook_names[hdr->hook_id];
 
-    auto *stats  = self->event_ctx_->stats;
-    auto *writer = self->event_ctx_->writer;
+    // ★ 数据驱动：调用 file_group 注册的 handler ★
+    // 新增模块不需改这里的代码。
+    if (self->group_->handler)
+        self->group_->handler(data, hook_name,
+            self->event_ctx_->stats, self->event_ctx_->writer);
 
-    // ★ 按 module_id 强转到具体类型 ★
-    switch (hdr->module_id) {
-    case MODULE_ROUTING:
-        if (size >= sizeof(struct routing_event)) {
-            auto *e = static_cast<const struct routing_event*>(data);
-            stats->process_routing(*e, hook_name);
-            writer->write_routing(*e, hook_name);
-        }
-        break;
-    case MODULE_APP:
-        if (size >= sizeof(struct app_event)) {
-            auto *e = static_cast<const struct app_event*>(data);
-            stats->process_app(*e, hook_name);
-            writer->write_app(*e, hook_name);
-        }
-        break;
-    case MODULE_SD:
-        if (size >= sizeof(struct sd_event)) {
-            auto *e = static_cast<const struct sd_event*>(data);
-            stats->process_sd(*e, hook_name);
-            writer->write_sd(*e, hook_name);
-        }
-        break;
-    }
     return 0;
 }
 
