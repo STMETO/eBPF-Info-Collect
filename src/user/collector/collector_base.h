@@ -13,7 +13,6 @@
 
 #include <cstdint>
 
-struct vsomeip_event;       // 前向声明，定义在 common/vsomeip_event.h
 class  StatsCollector;      // 前向声明，定义在 user/stats_collector.h
 class  ILogWriter;          // 前向声明，定义在 user/output/log_writer.h
 

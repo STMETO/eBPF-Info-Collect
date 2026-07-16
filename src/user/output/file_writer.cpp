@@ -1,114 +1,39 @@
 // file_writer.cpp — 文件日志输出实现
 
 #include "file_writer.h"
-#include "../../common/vsomeip_event.h"
 #include "../../common/vsomeip_types.h"
-#include <cstdio>
 #include <cinttypes>
 
-FileWriter::FileWriter(const char* file_path, bool use_json)
-    : file_path_(file_path), use_json_(use_json)
-{
-    ensure_open();
+FileWriter::FileWriter(const char* path, bool json) : path_(path), use_json_(json) { ensure_open(); }
+FileWriter::~FileWriter() { if (file_) fclose(file_); }
+bool FileWriter::ensure_open() { if (file_) return true; file_ = fopen(path_.c_str(), "a"); if (file_) setvbuf(file_, nullptr, _IOLBF, 0); return file_; }
+void FileWriter::flush() { if (file_) fflush(file_); }
+
+void FileWriter::write_common_json(const event_header& h, const char* hook, FILE* f) {
+    fprintf(f, "{\"ts\":%" PRIu64 ",\"pid\":%u,\"tid\":%u,\"comm\":\"%s\",\"module\":\"%s\",\"hook\":\"%s\",\"dir\":\"%s\",\"is_ret\":%s",
+            h.timestamp_ns, h.pid, h.tid, h.comm,
+            h.module_id == 1 ? "routing" : h.module_id == 2 ? "app" : h.module_id == 3 ? "sd" : "?",
+            hook, h.direction == DIR_SEND ? "SEND" : "RECV", h.is_retprobe ? "true" : "false");
 }
 
-FileWriter::~FileWriter()
-{
-    if (file_) {
-        fclose(file_);
-        file_ = nullptr;
-    }
-}
-
-bool FileWriter::ensure_open()
-{
-    if (file_)
-        return true;
-
-    // 以追加模式打开文件，行缓冲确保及时写入
-    file_ = fopen(file_path_.c_str(), "a");
-    if (file_) {
-        setvbuf(file_, nullptr, _IOLBF, 0);  // 行缓冲
-        fprintf(file_, "# vsomeip collector started\n");
-        return true;
-    }
-    return false;
-}
-
-void FileWriter::reopen()
-{
-    if (file_)
-        fclose(file_);
-    file_ = nullptr;
-    ensure_open();
-}
-
-// ═══════════════════════════════════════════════════════════════════════
-// 写入：用 JSON 格式写事件（文件输出默认 JSON，方便后续分析）
-// ═══════════════════════════════════════════════════════════════════════
-
-void FileWriter::write(const vsomeip_event& event, const char* hook_name)
-{
-    if (!ensure_open())
-        return;
-
-    if (use_json_) {
-        // JSON 格式：与 stdout_writer 的 JSON 输出一致
-        fprintf(file_,
-            "{"
-            "\"ts\":%" PRIu64 ","
-            "\"pid\":%u,\"tid\":%u,"
-            "\"comm\":\"%s\","
-            "\"module\":\"%s\","
-            "\"hook\":\"%s\","
-            "\"dir\":\"%s\","
-            "\"is_ret\":%s,"
-            "\"svc\":%u,\"method\":%u,"
-            "\"client\":%u,\"session\":%u,"
-            "\"msg_type\":\"%s\","
-            "\"ret_code\":%u,"
-            "\"payload_len\":%u,"
-            "\"retval\":%" PRId64
-            "}\n",
-            event.timestamp_ns,
-            event.pid, event.tid,
-            event.comm,
-            // module 名
-            event.module_id == MODULE_ROUTING ? "routing" :
-            event.module_id == MODULE_APP     ? "app"     :
-            event.module_id == MODULE_SD      ? "sd"      : "unknown",
-            hook_name,
-            event.direction == DIR_SEND ? "SEND" : "RECV",
-            event.is_retprobe ? "true" : "false",
-            event.service_id, event.method_id,
-            event.client_id, event.session_id,
-            // message_type 转字符串
-            event.message_type == SOMEIP_MT_REQUEST           ? "REQUEST" :
-            event.message_type == SOMEIP_MT_REQUEST_NO_RETURN ? "REQ_NORET" :
-            event.message_type == SOMEIP_MT_NOTIFICATION      ? "NOTIFICATION" :
-            event.message_type == SOMEIP_MT_REQUEST_ACK       ? "REQ_ACK" :
-            event.message_type == SOMEIP_MT_RESPONSE          ? "RESPONSE" :
-            event.message_type == SOMEIP_MT_ERROR             ? "ERROR" : "UNKNOWN",
-            event.return_code, event.payload_length,
-            event.retval
-        );
-    }
-}
-
-void FileWriter::write_stats(const char* json_line)
-{
+void FileWriter::write_routing(const routing_event& e, const char* hook) {
     if (!ensure_open()) return;
-    fprintf(file_, "[STATS] %s\n", json_line);
+    write_common_json(e.hdr, hook, file_);
+    fprintf(file_, ",\"svc\":%u,\"method\":%u,\"client\":%u,\"session\":%u,\"msg_type\":%u,\"ret_code\":%u,\"len\":%u,\"retval\":%" PRId64 "}\n",
+            e.service_id, e.method_id, e.client_id, e.session_id, e.message_type, e.return_code, e.payload_length, e.retval);
 }
 
-void FileWriter::write_latency(const char* json_line)
-{
+void FileWriter::write_app(const app_event& e, const char* hook) {
     if (!ensure_open()) return;
-    fprintf(file_, "[LATENCY] %s\n", json_line);
+    write_common_json(e.hdr, hook, file_);
+    fprintf(file_, ",\"this\":\"0x%" PRIx64 "\",\"msg\":\"0x%" PRIx64 "\",\"retval\":%" PRId64 "}\n", e.this_ptr, e.message_ptr, e.retval);
 }
 
-void FileWriter::flush()
-{
-    if (file_)
-        fflush(file_);
+void FileWriter::write_sd(const sd_event& e, const char* hook) {
+    if (!ensure_open()) return;
+    write_common_json(e.hdr, hook, file_);
+    fprintf(file_, ",\"svc\":%u,\"inst\":%u,\"evg\":%u,\"ttl\":%u}\n", e.service_id, e.instance_id, e.eventgroup_id, e.ttl);
 }
+
+void FileWriter::write_stats(const char* l)   { if (ensure_open()) fprintf(file_, "[STATS] %s\n", l); }
+void FileWriter::write_latency(const char* l) { if (ensure_open()) fprintf(file_, "[LATENCY] %s\n", l); }

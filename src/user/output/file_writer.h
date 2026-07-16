@@ -1,41 +1,32 @@
 // file_writer.h — 文件日志输出
-//
-// 把事件写入文件，支持自动轮转（按小时或按大小）。
-// 用于目标机器上没有终端时（嵌入式场景/后台运行）。
 
 #pragma once
 
 #include "log_writer.h"
+#include "../../common/event_header.h"
+#include "../../common/routing_event.h"
+#include "../../common/app_event.h"
+#include "../../common/sd_event.h"
 #include <cstdio>
 #include <string>
 
 class FileWriter : public ILogWriter {
 public:
-    /**
-     * @param file_path  日志文件路径（如 /tmp/vsomeip.log）
-     * @param use_json   JSON 格式 vs 人类可读
-     */
-    FileWriter(const char* file_path, bool use_json = true);
+    FileWriter(const char* path, bool json = true);
     ~FileWriter() override;
-
-    void write(const vsomeip_event& event, const char* hook_name) override;
-    void write_stats(const char* json_line) override;
-    void write_latency(const char* json_line) override;
+    void write_routing(const routing_event& e, const char* hook) override;
+    void write_app(const app_event& e, const char* hook) override;
+    void write_sd(const sd_event& e, const char* hook) override;
+    void write_stats(const char* line) override;
+    void write_latency(const char* line) override;
     void flush() override;
-    const char* name() const override { return file_path_.c_str(); }
-
-    /**
-     * 重新打开文件（用于日志轮转后）
-     */
-    void reopen();
+    const char* name() const override { return path_.c_str(); }
 
 private:
-    std::string file_path_;
-    FILE*       file_ = nullptr;
-    bool        use_json_;
-
-    /**
-     * 确保文件已打开
-     */
     bool ensure_open();
+    void write_common_json(const event_header& h, const char* hook, FILE* f);
+
+    std::string path_;
+    FILE* file_ = nullptr;
+    bool use_json_;
 };
