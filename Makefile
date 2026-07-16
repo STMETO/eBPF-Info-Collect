@@ -13,7 +13,8 @@ BPF_DIR   := $(SRC_DIR)/bpf
 USER_DIR  := $(SRC_DIR)/user
 COMMON_DIR:= $(SRC_DIR)/common
 BUILD_DIR := $(PROJ_DIR)/build
-EMBED_DIR := $(BPF_DIR)/embed
+GEN_DIR    := $(SRC_DIR)/gen
+EMBED_DIR := $(GEN_DIR)/embed
 SCRIPTS   := $(PROJ_DIR)/scripts
 
 # ── 库路径 ────────────────────────────────────────────────────────────
@@ -33,6 +34,8 @@ CXX      := g++
 BPF_CFLAGS := -target bpf -g -O2 \
               -D__TARGET_ARCH_arm64 \
               -D__BPF__ \
+              -I$(SRC_DIR) \
+              -I$(GEN_DIR) \
               -I$(VMLINUX_DIR) \
               -I$(LIBBPF_INC) \
               -I$(COMMON_DIR) \
@@ -64,7 +67,7 @@ USER_SRCS := $(shell find $(USER_DIR) -name '*.cpp')
 USER_OBJS := $(patsubst $(USER_DIR)/%.cpp, $(BUILD_DIR)/%.o, $(USER_SRCS))
 
 # embed 数据编译（单独编译，避免多重定义）
-EMBED_DATA_SRC := $(BPF_DIR)/embed_data.cpp
+EMBED_DATA_SRC := $(GEN_DIR)/embed_data.cpp
 EMBED_DATA_OBJ := $(BUILD_DIR)/embed_data.o
 
 # ── 最终产物 ──────────────────────────────────────────────────────────
@@ -103,10 +106,10 @@ $(EMBED_DIR)/%.bpf.embed.h: $(BUILD_DIR)/%.bpf.o | $(EMBED_DIR)
 
 # 生成 embed_data.cpp（自动包含所有 embed 头文件）
 $(EMBED_DATA_SRC): $(EMBED_HDRS)
+	@mkdir -p $(GEN_DIR)
 	@echo "// Auto-generated — includes all embed BPF bytecode" > $@
 	@for h in $(EMBED_HDRS); do \
-		rel=$$(realpath --relative-to=$(BPF_DIR) $$h); \
-		echo "#include \"$$rel\"" >> $@; \
+		echo "#include \"embed/$$(basename $$h)\"" >> $@; \
 	done
 
 # ── 3. 编译用户态 → 链接 ──────────────────────────────────────────────

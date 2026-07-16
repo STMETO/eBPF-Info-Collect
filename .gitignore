@@ -25,8 +25,9 @@ compile_commands.json
 .cache/
 .clangd
 
+# 本地库文件
 symbol/
 symbol-offsets/
-embed/
-#脚本生成产物
-embed_data.cpp  
+
+# 自动生成（gen/ 下所有文件均由脚本/Makefile 生成）
+src/gen/

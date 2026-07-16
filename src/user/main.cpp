@@ -40,7 +40,7 @@
 #include "output/stdout_writer.h"
 #include "output/file_writer.h"
 #include "stats_collector.h"
-#include "../hook_config.h"
+#include "../gen/hook_config.h"
 
 // ── 默认配置 ──────────────────────────────────────────────────────────
 

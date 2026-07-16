@@ -3,6 +3,7 @@
 #include "stdout_writer.h"
 #include "../../common/event_header.h"
 #include "../../common/vsomeip_types.h"
+#include "../../gen/hook_ids.h"
 #include <cstdio>
 #include <cinttypes>
 #include <ctime>

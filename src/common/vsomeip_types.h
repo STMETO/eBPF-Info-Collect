@@ -110,17 +110,6 @@
 #define DIR_RECV    1   // 接收方向（本节点是消息的接收方）
 
 // ═══════════════════════════════════════════════════════════════════════
-// 第 5 组：BPF 模块编号
-//
-// 用于 vsomeip_event 的 module_id 字段。
-// 用户态根据这个编号知道事件来自哪个 BPF 模块。
-//
-// 模块与 .bpf.c 文件的对应关系：
-//   MODULE_ROUTING = 1  →  bpf/routing.bpf.c  →  hook routing_manager_impl
-//   MODULE_APP     = 2  →  bpf/app.bpf.c      →  hook application_impl
-//   MODULE_SD      = 3  →  bpf/sd.bpf.c       →  hook service_discovery_impl
+// module_id 定义见 common/hook_ids.h（由 gen_hook_config.sh 自动生成）
+// MODULE_ROUTING / MODULE_APP / MODULE_SD 等，权威来源是 hooks.json
 // ═══════════════════════════════════════════════════════════════════════
-
-#define MODULE_ROUTING   1   // 路由层模块 — 所有消息收发必经之路
-#define MODULE_APP       2   // 应用层模块 — 应用程序视角的 send/receive
-#define MODULE_SD        3   // 服务发现模块 — OfferService / FindService / Subscribe

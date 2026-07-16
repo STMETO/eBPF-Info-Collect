@@ -10,7 +10,7 @@ extern "C" {
 }
 
 #include "../../common/event_header.h"   // 仅用于 sizeof 检查
-#include "../../hook_config.h"            // file_group + handler 指针
+#include "../../gen/hook_config.h"            // file_group + handler 指针
 
 #include <cstdio>
 #include <cstring>

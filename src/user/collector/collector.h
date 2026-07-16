@@ -15,7 +15,7 @@
 #pragma once
 
 #include "collector_base.h"
-#include "../../hook_config.h"
+#include "../../gen/hook_config.h"
 #include <cstddef>
 #include <vector>
 
