@@ -5,7 +5,6 @@
 //
 // 新增模块或 hook：
 //   只需在 hooks.json 的 files[].hooks[] 中加一条，重新 gen_hook_config.sh → 编译。
-//   C++ 代码零改动。
 //
 // 生命周期：
 //   c = new Collector(&file_groups[i]);
@@ -52,7 +51,7 @@ private:
     static int ringbuf_callback(void *ctx, void *data, size_t size);
 
     // ── 成员变量 ─────────────────────────────────────────────────────
-    const struct file_group* group_ = nullptr;   // ★ 文件分组配置（构造注入）
+    const struct file_group* group_ = nullptr;   // 文件分组配置（构造注入）
     EventContext*        event_ctx_ = nullptr;   // stats + writer
     struct bpf_object*   obj_ = nullptr;         // BPF 对象
     struct ring_buffer*  ringbuf_ = nullptr;     // ring buffer consumer

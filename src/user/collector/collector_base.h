@@ -1,6 +1,5 @@
 // collector_base.h — Uprobe 收集器的抽象接口
 //
-// 每个模块（routing / app / sd）都实现这个接口。
 // CollectorManager 通过这个接口统一管理所有收集器的生命周期：
 //   init() → attach() → poll() → detach() → destroy()
 //

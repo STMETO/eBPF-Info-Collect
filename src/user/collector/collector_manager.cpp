@@ -50,7 +50,6 @@ CollectorManager::~CollectorManager()
 // ═══════════════════════════════════════════════════════════════════════
 // 收集器注册
 // ═══════════════════════════════════════════════════════════════════════
-
 void CollectorManager::add_collector(IUprobeCollector* collector)
 {
     collectors_.emplace_back(collector);
@@ -66,7 +65,7 @@ IUprobeCollector* CollectorManager::find(const char* name)
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// init_all — 初始化所有 collector（BPF 字节码已嵌入，无需文件路径）
+// init_all — 初始化所有 collector
 // ═══════════════════════════════════════════════════════════════════════
 int CollectorManager::init_all()
 {
@@ -112,7 +111,6 @@ void CollectorManager::attach_all(int target_pid)
 // ═══════════════════════════════════════════════════════════════════════
 // set_event_context — 设置 EventContext
 // ═══════════════════════════════════════════════════════════════════════
-
 void CollectorManager::set_event_context(StatsCollector* stats, ILogWriter* writer)
 {
     event_ctx_.stats  = stats;

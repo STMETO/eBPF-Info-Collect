@@ -12,7 +12,7 @@ public:
     virtual ~ILogWriter() = default;
 
     /**
-     * ★ 通用事件写入 ★
+     * 通用事件写入
      *
      * 先写 event_header 的公共字段（ts/pid/tid/comm/module/hook/dir），
      * 然后调用 on_payload 回调写模块特定的 payload 字段，

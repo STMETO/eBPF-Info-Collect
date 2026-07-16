@@ -18,7 +18,7 @@ public:
     void set_log_writer(ILogWriter* w) { log_writer_ = w; }
     void set_report_interval(int sec) { report_interval_sec_ = sec; }
 
-    // ── ★ 通用事件处理（新增模块不需加方法）★ ─────────────────────────
+    // ── 通用事件处理（新增模块不需加方法）─────────────────────────
     //
     // 处理 event_header 能覆盖的所有逻辑：
     //   - 计数器（total/succ/fail）

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0
 // app.bpf.c — 应用层 hook 模块（3 个 hook）
 //
-// ★ 使用私有事件结构体 app_event（定义在 common/app_event.h） ★
+// 使用私有事件结构体 app_event（定义在 common/app_event.h）
 // 参数是 C++ 对象（shared_ptr<message>），BPF 不能解引用，只记录指针。
 
 #include "common.bpf.h"

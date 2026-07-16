@@ -1,6 +1,6 @@
 // event_header.h — 所有 BPF 事件结构体的公共头
 //
-// ★ 设计：Common Header + 任意 Payload ★
+// 设计：Common Header + 任意 Payload
 //
 // 每个模块定义自己的事件结构体，但必须以 event_header 作为第一个字段。
 // 用户态 ringbuf 回调先用 event_header* 读公共头（知道 module_id + hook_id），

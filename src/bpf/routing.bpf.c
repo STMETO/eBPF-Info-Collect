@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0
 // routing.bpf.c — 路由管理器 hook 模块（5 个 hook）
 //
-// ★ 私有事件结构体 routing_event（定义在 common/routing_event.h） ★
+// 私有事件结构体 routing_event（定义在 common/routing_event.h）
 // 用户态通过 hdr.module_id == 1 识别后强转为 routing_event*。
 
 #include "common.bpf.h"

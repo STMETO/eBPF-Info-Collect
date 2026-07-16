@@ -10,13 +10,17 @@
 
 static const uint64_t TIMEOUT_NS = 30ULL*1000*1000*1000;
 
-StatsCollector::StatsCollector()  { for(int i=0;i<4;i++){mod_send_[i]=mod_recv_[i]=0;} }
+StatsCollector::StatsCollector()  { 
+    for(int i=0;i<4;i++){
+        mod_send_[i]=mod_recv_[i]=0;
+    } 
+}
+
 StatsCollector::~StatsCollector() = default;
 
 // ═══════════════════════════════════════════════════════════════════════
-// process_event — ★ 通用入口（新增模块不需加方法）
+// process_event — 通用入口
 // ═══════════════════════════════════════════════════════════════════════
-
 void StatsCollector::process_event(const event_header* hdr, const void* payload,
                                     const char* hook, int64_t retval,
                                     on_latency_fn on_latency)
@@ -26,12 +30,19 @@ void StatsCollector::process_event(const event_header* hdr, const void* payload,
     // ── 计数器（所有模块通用）─────────────────────────────────────────
     auto& s = hook_stats_[hook];
     s.total++;
-    if (is_ret) { if (retval==0) s.succ++; else s.fail++; }
+    if (is_ret) { 
+        if (retval==0) 
+            s.succ++; 
+        else 
+            s.fail++; 
+    }
 
     // ── 收发量（所有模块通用）─────────────────────────────────────────
     if (!is_ret) {
-        if (hdr->direction == DIR_SEND) mod_send_[hdr->module_id]++;
-        else mod_recv_[hdr->module_id]++;
+        if (hdr->direction == DIR_SEND) 
+            mod_send_[hdr->module_id]++;
+        else 
+            mod_recv_[hdr->module_id]++;
     }
 
     // ── 类型特定逻辑（只有 routing 需要时延匹配）───────────────────────
@@ -40,7 +51,6 @@ void StatsCollector::process_event(const event_header* hdr, const void* payload,
 }
 
 // ── 时延匹配（public，被 routing handler 的回调调用）─────────────────
-
 void StatsCollector::record_pending(uint16_t svc, uint16_t method,
                                      uint16_t client, uint16_t session, uint64_t ts)
 {
@@ -55,9 +65,15 @@ void StatsCollector::try_match(uint16_t svc, uint16_t method,
 {
     uint64_t k = ((uint64_t)svc<<48)|((uint64_t)method<<32)|((uint64_t)client<<16)|session;
     auto it = pending_.find(k);
-    if (it == pending_.end()) return;
+    if (it == pending_.end()) 
+        return;
+
     uint64_t lat = recv_ts - it->second.send_ts;
-    if (lat > 60ULL*1000*1000*1000) { pending_.erase(it); return; }
+    if (lat > 60ULL*1000*1000*1000) { 
+        pending_.erase(it); 
+        return; 
+    }
+
     latency_.push_back(lat);
     if (log_writer_) {
         char b[256];
@@ -81,9 +97,14 @@ void StatsCollector::flush_report()
     uint64_t now=(uint64_t)ts.tv_sec*1000000000ULL+ts.tv_nsec;
     double elapse=last_report_ns_?(now-last_report_ns_)/1e9:0;
     last_report_ns_=now;
-    if(!log_writer_)return;
+
+    if(!log_writer_)
+        return;
+
     for(int m=1;m<=3;m++){
-        if(!mod_send_[m]&&!mod_recv_[m])continue;
+        if(!mod_send_[m]&&!mod_recv_[m])
+            continue;
+        
         const char* nm=m==1?"routing":m==2?"app":"sd";
         char b[256];snprintf(b,sizeof(b),"{\"module\":\"%s\",\"elapsed\":%.1f,\"send\":%" PRIu64 ",\"recv\":%" PRIu64 "}",nm,elapse,mod_send_[m],mod_recv_[m]);
         log_writer_->write_stats(b);mod_send_[m]=mod_recv_[m]=0;
