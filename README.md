@@ -2,45 +2,50 @@
 
 ## 项目简介
 
-本项目使用 eBPF uprobe 技术，在 **vsomeip** 进程内挂载探测点（hook），
-采集所有 SOME/IP 消息的收发信息。核心能力：
+使用 eBPF uprobe 在 **vsomeip** 进程内挂载探测点，采集所有 SOME/IP 消息的收发信息。
 
 - **消息统计**：按消息类型（REQUEST / RESPONSE / NOTIFICATION / ERROR）分类计数
 - **时延测量**：匹配 REQUEST → RESPONSE 对，计算往返时延（RTT），输出 p50/p99/max
-- **成功/失败追踪**：通过 uretprobe 捕获函数返回值，统计发送成功率和失败率
+- **成功/失败追踪**：通过 uretprobe 捕获函数返回值，统计发送成功率
 - **多维度覆盖**：同时监控路由层、应用层、服务发现层
 
-**适用场景**：车载 SOA 架构下的 SOME/IP 通信质量监控与问题排查。
+**适用场景**：车载 SOA 架构下 SOME/IP 通信质量监控与问题排查。
 
 ---
 
 ## 架构概览
 
 ```
-                    ┌── BPF 内核态 ──────────────────────────┐
-someipd 进程        │                                        │
-  │                 │  routing.bpf.c  (5 hooks)              │
-  ├─ send() ───────▶│  app.bpf.c      (3 hooks)              │
-  ├─ on_message() ─▶│  sd.bpf.c       (4 hooks)              │
-  │                 │     ↓ ring buffer                      │
-  └─────────────────┴────────────────────────────────────────┘
-                              │ epoll
-                              ▼
-                    ┌── 用户态 C++ ───────────────────────────┐
-                    │                                        │
-                    │  CollectorManager (epoll 多路复用)       │
-                    │    ├─ RoutingCollector                  │
-                    │    ├─ AppCollector                      │
-                    │    └─ SdCollector                       │
-                    │                                        │
-                    │  StatsCollector (计数器 + 时延匹配)      │
-                    │    └─ pending 哈希表 (REQUEST→RESPONSE)  │
-                    │                                        │
-                    │  LogWriter (日志输出)                    │
-                    │    ├─ StdoutWriter (终端，人类可读/JSON) │
-                    │    └─ FileWriter  (文件，JSON)          │
-                    └────────────────────────────────────────┘
+                     ┌── BPF 内核态 ──────────────────────────┐
+ someipd 进程        │                                        │
+   │                 │  routing.bpf.c  (5 hooks)              │
+   ├─ send() ───────▶│  app.bpf.c      (3 hooks)              │
+   ├─ on_message() ─▶│  sd.bpf.c       (4 hooks)              │
+   │                 │     ↓ ring buffer                      │
+   └─────────────────┴────────────────────────────────────────┘
+                               │ epoll
+                               ▼
+                     ┌── 用户态 C++ ───────────────────────────┐
+                     │                                        │
+                     │  CollectorManager (epoll 多路复用)       │
+                     │    └─ Collector × N（每模块一个实例）     │
+                     │                                        │
+                     │  StatsCollector (计数器 + 时延匹配)      │
+                     │    └─ process_event() 通用入口           │
+                     │    └─ pending 哈希表 (REQUEST→RESPONSE)  │
+                     │                                        │
+                     │  LogWriter (日志输出)                    │
+                     │    ├─ StdoutWriter (终端，人类可读/JSON) │
+                     │    └─ FileWriter  (文件，JSON)          │
+                     │                                        │
+                     │  Handler (每模块一个 .cpp)               │
+                     │    ├─ routing_handler.cpp               │
+                     │    ├─ app_handler.cpp                   │
+                     │    └─ sd_handler.cpp                   │
+                     └────────────────────────────────────────┘
 ```
+
+**核心设计理念**：Common Header + 任意 Payload。每个模块定义自己的事件结构体，第一个字段必须是 `event_header`。BPF 提交任意大小的事件，用户态 ringbuf 回调先读公共头（知道 module_id），再交给对应模块的 handler 处理。collector / stats / writer 三层都不需要知道具体模块的类型。
 
 ---
 
@@ -49,243 +54,205 @@ someipd 进程        │                                        │
 ```
 eBPF-Info-collect/
 │
-├── README.md                          ← 你正在看的文件
-├── Makefile                           ★ 构建系统（后续添加）
+├── README.md
+├── Makefile                           # 构建系统（BPF 编译 → embed → 链接）
+├── .gitignore
 │
 ├── config/
-│   └── hooks.json                     ★ hook 配置文件（人类可读签名 + 目标路径）
+│   └── hooks.json                     # ★ 配置文件（每个模块的文件名/hook/偏移来源）
 │
 ├── scripts/
-│   ├── export_symbol.sh               ★ 从 ELF 提取符号偏移（mangled + demangled）
-│   └── gen_hook_config.sh             ★ 查偏移 → 生成 src/hook_config.h
+│   ├── export_symbol.sh               # 从 ELF 提取符号偏移（mangled + demangled）
+│   ├── gen_hook_config.sh             # 读 hooks.json → 生成 src/gen/ 下所有头文件
+│   └── embed_bpf.sh                   # xxd -i 把 .bpf.o 转成嵌入头文件
 │
-├── symbol/                            ★ 本地编译的 .so 文件（用于提取偏移）
-│   ├── libvsomeip3.so.3.7.4
-│   ├── libvsomeip3-sd.so.3.7.4
-│   ├── libvsomeip3-cfg.so.3.7.4
-│   └── libvsomeip3-e2e.so.3.7.4
+├── symbol/                            # 本地 .so 文件（提取偏移用）
+├── symbol-offsets/                    # 偏移表（export_symbol.sh 输出）
 │
-├── symbol-offsets/                    ★ 自动生成的偏移表（export_symbol.sh 输出）
-│   ├── *.offsets.tsv                  （mangled 名 + 偏移）
-│   └── *.offsets.demangled.tsv        （demangled 人类可读名 + 偏移）
-│
-├── vmlinux/                           BTF 类型头文件
-│   ├── arm64/vmlinux_601.h            ★ ARM64 Linux 6.1
-│   ├── arm/vmlinux_62.h               ARM32 Linux 6.2
-│   ├── x86/vmlinux_601.h              x86 Linux 6.1（本地开发用）
-│   └── ... 其他架构 ...
+├── vmlinux/                           # BTF 类型头文件
+│   └── arm64/vmlinux_601.h            # ★ ARM64 Linux 6.1
 │
 ├── lib/
-│   ├── libbpf/                         libbpf 静态库
-│   ├── bpftool/                        BPF 工具链
-│   └── vsomeip/                        ★ vsomeip 源码（git submodule）
+│   ├── libbpf/                        # libbpf 静态库
+│   ├── bpftool/                       # BPF 工具
+│   └── vsomeip/                       # vsomeip 源码（git submodule）
 │
 └── src/
-    ├── common/                         ★ BPF ↔ 用户态 共享头文件
-    │   ├── vsomeip_types.h             SOME/IP 协议常量
-    │   └── vsomeip_event.h             事件结构体（数据格式定义）
+    ├── gen/                           # ★ 自动生成（git ignore）
+    │   ├── hook_config.h              #   file_groups[] + handler 指针
+    │   ├── hook_ids.h                 #   MODULE_* + HOOK_* 宏定义
+    │   ├── embed_data.cpp             #   统一包含所有 embed 头文件
+    │   └── embed/                     #   xxd -i 生成的 BPF 字节数组
     │
-    ├── bpf/                            ★ BPF 内核态代码（C）
-    │   ├── common.bpf.h                公共辅助函数
-    │   ├── routing.bpf.c               路由层（5 hooks，最重要）
-    │   ├── app.bpf.c                   应用层（3 hooks）
-    │   └── sd.bpf.c                    服务发现（4 hooks）
+    ├── common/                        # ★ BPF ↔ 用户态 共享头文件
+    │   ├── event_header.h             #   公共头（所有事件结构体的第一个字段）
+    │   ├── vsomeip_types.h            #   SOME/IP 协议常量（message_type 等）
+    │   ├── routing_event.h            #   routing 模块事件结构体
+    │   ├── app_event.h                #   app 模块事件结构体
+    │   └── sd_event.h                 #   sd 模块事件结构体
     │
-    ├── hook_config.h                   ★ 自动生成：12 个 hook 的偏移表
+    ├── bpf/                           # BPF 内核态代码（C，每个模块一个 .bpf.c）
+    │   ├── common.bpf.h               #   公共辅助：fill_header() / read_someip_header()
+    │   ├── routing.bpf.c              #   路由层（5 hooks）
+    │   ├── app.bpf.c                  #   应用层（3 hooks）
+    │   └── sd.bpf.c                   #   服务发现（4 hooks）
     │
-    └── user/                           ★ 用户态加载器（C++）
-        ├── main.cpp                    入口（CLI 参数解析 + 组装）
+    └── user/                          # 用户态加载器（C++）
+        ├── main.cpp                   #   入口：CLI 参数解析 + 组装所有组件
         │
         ├── collector/
-        │   ├── collector_base.h        抽象接口（IUprobeCollector + EventContext）
-        │   ├── collector_manager.h     epoll 多路复用管理器
-        │   ├── collector_manager.cpp
-        │   ├── routing_collector.h     路由层 collector
-        │   ├── routing_collector.cpp
-        │   ├── app_collector.h         应用层 collector
-        │   ├── app_collector.cpp
-        │   ├── sd_collector.h          服务发现 collector
-        │   └── sd_collector.cpp
+        │   ├── collector_base.h       #   抽象接口 + EventContext 结构体
+        │   ├── collector.h            #   通用 Collector 实现（配置驱动）
+        │   ├── collector.cpp
+        │   ├── collector_manager.h    #   epoll 多路复用 + 生命周期管理
+        │   └── collector_manager.cpp
+        │
+        ├── stats/
+        │   ├── stats_collector.h      #   统计收集 + 时延匹配
+        │   └── stats_collector.cpp
         │
         ├── output/
-        │   ├── log_writer.h            日志输出接口
-        │   ├── stdout_writer.h         终端输出
+        │   ├── log_writer.h           #   日志输出接口 + format_callback_t 类型
+        │   ├── stdout_writer.h        #   终端输出
         │   ├── stdout_writer.cpp
-        │   ├── file_writer.h           文件输出
+        │   ├── file_writer.h          #   文件输出
         │   └── file_writer.cpp
         │
-        └── stats_collector.h           统计 + 时延匹配
-            └── stats_collector.cpp
+        └── handler/                   # ★ 每个模块的事件处理器
+            ├── routing_handler.cpp    #   format_payload + on_latency 回调
+            ├── app_handler.cpp
+            └── sd_handler.cpp
 ```
 
 ---
 
-## Hook 清单（12 个）
+## Hook 清单（12 个，3 个模块）
 
-### Routing 模块（`routing.bpf.c`）— 挂在 `libvsomeip3.so`
-
-| Hook | 探头 | 挂载函数 | 捕获内容 |
-|------|:---:|------|------|
-| `rm_send_entry` | uprobe | `routing_manager_impl::send(byte*, ...)` | ★ 所有发出消息的 SOME/IP header |
-| `rm_send_ret` | uretprobe | 同上 | 发送成功/失败返回值 |
-| `rm_send_to_entry` | uprobe | `routing_manager_impl::send_to(byte*, ...)` | 端点定向发送的 header |
-| `rm_send_to_ret` | uretprobe | 同上 | 端点发送结果 |
-| `rm_on_message` | uprobe | `routing_manager_impl::on_message(byte*, ...)` | ★ 所有收到消息的 SOME/IP header |
-
-### App 模块（`app.bpf.c`）— 挂在 `libvsomeip3.so`
-
-| Hook | 探头 | 挂载函数 | 捕获内容 |
-|------|:---:|------|------|
-| `app_send_entry` | uprobe | `application_impl::send(shared_ptr<message>)` | 应用调用 send() |
-| `app_send_ret` | uretprobe | 同上 | 应用层发送结果 |
-| `app_on_message` | uprobe | `application_impl::on_message(...)` | 消息投递到应用 |
-
-### SD 模块（`sd.bpf.c`）— 挂在 `libvsomeip3-sd.so`
-
-| Hook | 探头 | 挂载函数 | 捕获内容 |
-|------|:---:|------|------|
-| `sd_send` | uprobe | `service_discovery_impl::send(bool)` | SD 消息刷新到网络 |
-| `sd_process_offer` | uprobe | `process_offerservice_serviceentry(...)` | 收到 OfferService |
-| `sd_send_subscription` | uprobe | `send_subscription(...)` | 发送 SubscribeEventgroup |
-| `sd_handle_subscription` | uprobe | `handle_eventgroup_subscription(...)` | 处理订阅请求 |
+| 模块 | Hook | 探头 | 挂载函数 |
+|------|------|:---:|------|
+| routing | `rm_send_entry` | uprobe | `routing_manager_impl::send(byte*, ...)` |
+| routing | `rm_send_ret` | uretprobe | 同上 |
+| routing | `rm_send_to_entry` | uprobe | `routing_manager_impl::send_to(byte*, ...)` |
+| routing | `rm_send_to_ret` | uretprobe | 同上 |
+| routing | `rm_on_message` | uprobe | `routing_manager_impl::on_message(byte*, ...)` |
+| app | `app_send_entry` | uprobe | `application_impl::send(shared_ptr<message>)` |
+| app | `app_send_ret` | uretprobe | 同上 |
+| app | `app_on_message` | uprobe | `application_impl::on_message(...)` |
+| sd | `sd_send` | uprobe | `service_discovery_impl::send(bool)` |
+| sd | `sd_process_offer` | uprobe | `process_offerservice_serviceentry(...)` |
+| sd | `sd_send_subscription` | uprobe | `send_subscription(...)` |
+| sd | `sd_handle_subscription` | uprobe | `handle_eventgroup_subscription(...)` |
 
 ---
 
-## 代码阅读顺序
-
-按自底向上，从基础组件到入口，建议按以下顺序阅读：
-
-### 第 1 层：基础定义（理解"有什么"）
-
-| 顺序 | 文件 | 读什么 |
-|:---:|------|------|
-| 1 | `src/common/vsomeip_types.h` | SOME/IP 协议常量：message_type 枚举、header 16 字节布局、返回码 |
-| 2 | `src/common/vsomeip_event.h` | ★ 核心数据结构：BPF→用户态的事件格式，所有模块共用 |
-| 3 | `src/user/output/log_writer.h` | 日志输出接口（ILogWriter）：write / write_stats / write_latency |
-| 4 | `src/user/collector/collector_base.h` | Collector 抽象接口 + EventContext（stats + writer 的桥接结构体） |
-| 5 | `src/user/stats_collector.h` | 统计模块接口：计数器、pending 表、时延匹配 |
-
-### 第 2 层：输出实现（理解"写到哪"）
-
-| 顺序 | 文件 | 读什么 |
-|:---:|------|------|
-| 6 | `src/user/output/stdout_writer.h` | 终端输出（人类可读格式 + JSON 格式） |
-| 7 | `src/user/output/stdout_writer.cpp` | 实现细节：颜色标记、时间格式化、JSON 构造 |
-| 8 | `src/user/output/file_writer.h` | 文件输出（追加模式，行缓冲） |
-| 9 | `src/user/output/file_writer.cpp` | 实现细节：ensure_open / reopen / JSON 格式 |
-
-### 第 3 层：统计实现（理解"怎么算"）
-
-| 顺序 | 文件 | 读什么 |
-|:---:|------|------|
-| 10 | `src/user/stats_collector.cpp` | ★ 核心算法：<br>• `process_event()` — 事件入口<br>• `make_key()` — 构造 (svc,method,client,session) 64位 key<br>• `record_pending()` — REQUEST 存入待匹配表<br>• `try_match_latency()` — RESPONSE 匹配计算时延<br>• `flush_report()` — p50/p99/max 统计摘要<br>• `evict_expired()` — 30 秒超时清理 |
-
-### 第 4 层：Collector 实现（理解"怎么抓"）
-
-| 顺序 | 文件 | 读什么 |
-|:---:|------|------|
-| 11 | `src/user/collector/routing_collector.h` | 最重要 collector 的接口（5 hooks） |
-| 12 | `src/user/collector/routing_collector.cpp` | ★ 关键流程：<br>• `ringbuf_callback()` — 事件回调（stats + log）<br>• `init()` — open → load → filter_hooks<br>• `attach()` — 遍历 hooks → 偏移量挂载 → 创建 ringbuf consumer |
-| 13 | `src/user/collector/app_collector.h` | 应用层 collector 接口 |
-| 14 | `src/user/collector/app_collector.cpp` | 实现，和 routing 相同的模式 |
-| 15 | `src/user/collector/sd_collector.h` | 服务发现 collector 接口 |
-| 16 | `src/user/collector/sd_collector.cpp` | 实现，挂在 libvsomeip3-sd.so 上 |
-
-### 第 5 层：管家（理解"怎么管"）
-
-| 顺序 | 文件 | 读什么 |
-|:---:|------|------|
-| 17 | `src/user/collector/collector_manager.h` | Manager 接口：add_collector / init_all / attach_all / run_loop |
-| 18 | `src/user/collector/collector_manager.cpp` | ★ 核心逻辑：<br>• `init_all()` — 加载所有 .bpf.o<br>• `attach_all()` — 注入 EventContext → attach<br>• `run_loop()` — epoll_wait 多路复用<br>• `set_event_context()` — 桥接 stats + writer |
-
-### 第 6 层：入口（理解"怎么启动"）
-
-| 顺序 | 文件 | 读什么 |
-|:---:|------|------|
-| 19 | `src/user/main.cpp` | CLI 入口：getopt_long 参数解析 → 创建组件 → 组装 → run_loop |
-
-### BPF 内核态代码
-
-| 顺序 | 文件 | 读什么 |
-|:---:|------|------|
-| 20 | `src/bpf/common.bpf.h` | 公共辅助：fill_common() / read_someip_header() |
-| 21 | `src/bpf/routing.bpf.c` | ★ 路由层 hook：5 个 SEC handler，读 byte* 解析 header |
-| 22 | `src/bpf/app.bpf.c` | 应用层 hook：3 个 SEC handler，读 shared_ptr 指针 |
-| 23 | `src/bpf/sd.bpf.c` | 服务发现 hook：4 个 SEC handler，读 service_id 等参数 |
-
-### 脚本和配置
-
-| 顺序 | 文件 | 读什么 |
-|:---:|------|------|
-| 24 | `config/hooks.json` | Hook 配置：每个 hook 的 demangled 签名 + 库名 + retprobe |
-| 25 | `scripts/export_symbol.sh` | ELF 解析：readelf → 计算 file_offset → 输出 tsv |
-| 26 | `scripts/gen_hook_config.sh` | 查偏移脚本：读 hooks.json + offsets → 生成 hook_config.h |
-
----
-
-## 数据流（完整版）
+## 数据流
 
 ```
 1. 启动
    main.cpp
-     → 解析 CLI（-p PID / -d bpf_dir / -o output / --json / --enable）
+     → 解析 CLI（-p PID / -o output / --json / --enable / -s stats_interval）
      → 创建 StdoutWriter / FileWriter
      → 创建 StatsCollector + EventContext{&stats, writer}
      → manager.set_event_context(&stats, writer)
-     → manager.add_collector(RoutingCollector / AppCollector / SdCollector)
-     → manager.init_all(bpf_dir)     // 加载所有 .bpf.o
-     → manager.attach_all(pid)       // 注入 EventContext → 挂载 uprobe → 创建 ringbuf
+     → 遍历 file_groups[]，创建 Collector(&file_groups[i])
+     → manager.init_all()       // 从嵌入字节码加载所有 BPF
+     → manager.attach_all(pid)  // 注入 EventContext → 偏移量挂载 uprobe → 创建 ringbuf
 
 2. 运行时（每个 SOME/IP 消息触发一次）
    someipd 调用 routing_manager_impl::send(byte* data, ...)
      → BPF uprobe 触发
      → routing.bpf.c: hook_rm_send_entry()
-         → bpf_ringbuf_reserve(&routing_events)
-         → fill_common(event, ...)           // 填 PID/TID/时间戳
-         → read_someip_header(event, data)   // 从 byte* 读 16 字节 header
-         → bpf_ringbuf_submit(event)
+         → bpf_ringbuf_reserve(&routing_events, sizeof(struct routing_event))
+         → fill_header(&e->hdr, MODULE_ROUTING, HOOK_RM_SEND_ENTRY, ...)
+         → read_someip_header(e, data, len)
+         → bpf_ringbuf_submit(e)
 
-     → epoll_wait 返回 routing_collector 的 ringbuf fd 可读
+     → epoll_wait 返回 ringbuf fd 可读
      → ring_buffer__consume()
-     → ringbuf_callback()                     // ★ 静态 C 回调
+     → collector.cpp: ringbuf_callback()
+         → hdr = (event_header*)data
+         → group_->handler(data, hook_name, stats, writer)  // ★ handler 指针
 
-           ┌─ stats->process_event(event, hook_name)
-           │   ├─ update_counters()           // 累加：total/success/fail/by_type
-           │   ├─ record_pending()            // REQUEST → pending[key] = timestamp
-           │   └─ try_match_latency()         // RESPONSE → latency = now - pending[key]
-           │       └─ writer->write_latency() // [LATENCY] svc=... latency_us=334
-           │
-           └─ writer->write(event, hook_name) // [routing] ts=... svc=... type=REQUEST
+            ┌─ routing_handler.cpp: routing_event_handler()
+            │   ├─ stats->process_event(&e->hdr, data, hook, e->retval, on_latency)
+            │   │   ├─ 计数器累加（total / succ / fail）
+            │   │   ├─ 模块收发量累加
+            │   │   └─ on_latency(payload, hook, this)
+            │   │       ├─ record_pending() // REQUEST → pending[key] = timestamp
+            │   │       └─ try_match()      // RESPONSE → latency = now - pending[key]
+            │   │
+            │   └─ writer->write_event(&e->hdr, data, hook, format_payload)
+            │       ├─ 公共头格式化（ts / pid / tid / comm / module / hook / dir）
+            │       └─ format_payload() → 模块特有字段格式化
+            │
+            └─ 日志输出 → stdout / file
 
-3. 定时（每 N 秒）
-   CollectorManager 定时器
+3. 定时（每 N 秒，默认 10s）
+   CollectorManager 事件循环中调用：
      → stats.flush_report()
-         ├─ writer->write_stats("[STATS] routing: send=5000(succ=4950) recv=4800")
-         ├─ writer->write_stats("[STATS] latency: p50=150us p99=850us max=5000us")
-         └─ 重置计数器
+         ├─ 每个模块的收发量统计
+         ├─ 时延统计（avg / p50 / p99 / max）
+         └─ hook 调用计数
      → stats.evict_expired()
-         └─ 清理 pending 表中超过 30 秒的条目 → [TIMEOUT]
+         └─ 清理 pending 表中超过 30 秒的条目
 
 4. 停止
-   Ctrl+C → SIGINT → g_running=0 → run_loop 退出
-     → stats.flush_report()   // 最后一次统计
+   Ctrl+C → SIGINT → g_running=0
+     → stats.flush_report()     // 最后一次统计
      → stats.evict_expired()
-     → manager.shutdown()     // detach + destroy
+     → manager.shutdown()       // detach + destroy
 ```
 
 ---
 
-## 构建（TODO）
+## 代码阅读顺序
+
+按自底向上，从基础定义到入口：
+
+| 层 | 顺序 | 文件 | 读什么 |
+|---|:---:|------|------|
+| 基础定义 | 1 | `src/common/vsomeip_types.h` | SOME/IP 协议常量：message_type、header 布局 |
+| 基础定义 | 2 | `src/common/event_header.h` | ★ 公共头结构体，所有事件的前几个字节 |
+| 基础定义 | 3 | `src/common/routing_event.h` | routing 模块的私有事件结构体 |
+| 基础定义 | 4 | `src/common/app_event.h` | app 模块的私有事件结构体 |
+| 基础定义 | 5 | `src/common/sd_event.h` | sd 模块的私有事件结构体 |
+| 接口 | 6 | `src/user/collector/collector_base.h` | Collector 抽象接口 + EventContext |
+| 接口 | 7 | `src/user/output/log_writer.h` | 日志输出接口 + format_callback_t |
+| 接口 | 8 | `src/user/stats/stats_collector.h` | 统计接口 + stats_callback_t |
+| 核心实现 | 9 | `src/user/collector/collector.cpp` | ★ BPF 加载 / uprobe 挂载 / ringbuf 消费 |
+| 核心实现 | 10 | `src/user/collector/collector_manager.cpp` | epoll 多路复用 + 生命周期管理 |
+| 核心实现 | 11 | `src/user/stats/stats_collector.cpp` | ★ 计数器 + 时延匹配算法 |
+| 输出 | 12 | `src/user/output/stdout_writer.cpp` | 终端输出（人类可读 + JSON） |
+| 输出 | 13 | `src/user/output/file_writer.cpp` | 文件输出 |
+| handler | 14 | `src/user/handler/routing_handler.cpp` | ★ format_payload + on_latency 回调示例 |
+| handler | 15 | `src/user/handler/app_handler.cpp` | 只做格式化，不做时延匹配 |
+| handler | 16 | `src/user/handler/sd_handler.cpp` | 同上 |
+| 入口 | 17 | `src/user/main.cpp` | CLI 入口：组装所有组件 |
+| BPF | 18 | `src/bpf/common.bpf.h` | BPF 辅助函数：fill_header / read_someip_header |
+| BPF | 19 | `src/bpf/routing.bpf.c` | ★ routing BPF handler |
+| BPF | 20 | `src/bpf/app.bpf.c` | app BPF handler |
+| BPF | 21 | `src/bpf/sd.bpf.c` | sd BPF handler |
+| 配置 | 22 | `config/hooks.json` | 模块和 hook 配置 |
+| 脚本 | 23 | `scripts/export_symbol.sh` | readelf → 计算文件偏移 |
+| 脚本 | 24 | `scripts/gen_hook_config.sh` | hooks.json → 生成头文件 |
+| 生成 | 25 | `src/gen/hook_config.h` | 自动生成的 file_groups[]（构建后查看） |
+| 生成 | 26 | `src/gen/hook_ids.h` | 自动生成的 MODULE_*/HOOK_* 宏 |
+
+---
+
+## 构建
 
 ```bash
-# 1. 提取符号偏移
+# 1. 提取符号偏移（每次更新 symbol/ 下的 .so 后执行）
 ./scripts/export_symbol.sh
 
-# 2. 生成 hook_config.h
+# 2. 生成配置头文件
 ./scripts/gen_hook_config.sh
 
 # 3. 编译
-make ARCH=arm64
+make
+
+# 产物：build/vsomeip_collector（单文件，BPF 字节码嵌入其中）
 ```
 
 ---
@@ -293,7 +260,7 @@ make ARCH=arm64
 ## 使用
 
 ```bash
-# 监控所有进程，终端人类可读输出（默认）
+# 监控所有进程，终端人类可读输出
 vsomeip_collector
 
 # 只监控 PID 1234
@@ -312,43 +279,187 @@ vsomeip_collector -h
 **输出示例：**
 
 ```
-[R] 14:32:01.234567  PID:1234   TID:5678   someipd            rm_send_entry       SEND
-  svc=0x1234  method=0x0001  client=0x5678  session=0x9ABC  type=REQUEST(0x00)  rc=0x00  payload=64
+[R] 14:32:01.234567  PID:1234   TID:5678   someipd   rm_send_entry       SEND
+  svc=0x1234 method=0x0001 client=0x5678 session=0x9ABC type=REQUEST(0x00) rc=0x00 payload=64
 
-[R] 14:32:01.234789  PID:1234   TID:5678   someipd            rm_send_ret   [RET] SEND
-  retval=0
-  ...
-[LATENCY] {"svc":4660,"method":1,"client":22136,"session":39612,"type":"RESPONSE","send_ts":...,"recv_ts":...,"latency_us":334.2}
+[LATENCY] {"svc":4660,"method":1,"client":22136,"session":39612,"type":"RESPONSE","latency_us":334.2}
 
-[STATS] {"module":"routing","elapsed":10.0,"send_total":5000,"recv_total":4800}
+[STATS] {"module":"routing","elapsed":10.0,"send":5000,"recv":4800}
 [STATS] {"type":"latency","samples":4800,"avg_us":234,"p50_us":150,"p99_us":850,"max_us":5000}
 ```
 
 ---
 
-## 添加新 Hook 的步骤
+## 新增一个模块
 
-1. 在 `config/hooks.json` 中添加条目（复制 demangled 签名）
-2. 运行 `./scripts/gen_hook_config.sh` 重新生成 `hook_config.h`
-3. 在对应 `.bpf.c` 中添加新的 `SEC("uprobe/...")` handler
-4. 在对应 collector 的 `ringbuf_callback()` 中添加 hook 名
-5. 重新编译
+以新增 `abc` 模块为例，需要 hook `xyz::hij_impl::ght(bool, bool)` 函数（挂在 `/usr/lib/xyz.so.3`）。
+
+### 前提
+
+- 目标 `.so` 文件已放到 `symbol/` 目录
+- 已运行 `./scripts/export_symbol.sh` 提取偏移
+- 在 `symbol-offsets/` 中可以查到 `xyz::hij_impl::ght(bool, bool)` 的 FILE_OFFSET
+
+### 第 1 步：定义事件结构体 `src/common/abc_event.h`
+
+```c
+#pragma once
+#include "event_header.h"
+
+struct abc_event {
+    // ★ 第一个字段必须是 event_header
+    struct event_header hdr;
+
+    // 自定义字段（想抓什么就定义什么）
+    uint64_t param_bool1;       // bool 参数 1
+    uint64_t param_bool2;       // bool 参数 2
+    int64_t  retval;            // uretprobe 返回值
+};
+```
+
+### 第 2 步：写 BPF 内核代码 `src/bpf/abc.bpf.c`
+
+```c
+#include "common.bpf.h"
+#include "../common/abc_event.h"
+#include "../gen/hook_ids.h"     // HOOK_* 宏
+
+char LICENSE[] SEC("license") = "GPL";
+
+// ringbuf map（名称和 hooks.json 中保持一致）
+struct {
+    __uint(type, BPF_MAP_TYPE_RINGBUF);
+    __uint(max_entries, 128 * 1024);
+} abc_events SEC(".maps");
+
+// 通用提交函数
+static __always_inline int submit_abc(void *ctx, uint8_t hook_id,
+    uint8_t dir, bool is_ret, int64_t retval)
+{
+    struct abc_event *e;
+    e = bpf_ringbuf_reserve(&abc_events, sizeof(*e), 0);
+    if (!e) return 0;
+
+    fill_header(&e->hdr, MODULE_ABC, hook_id, dir, is_ret);
+    e->retval = retval;
+    bpf_ringbuf_submit(e, 0);
+    return 0;
+}
+
+// Hook: ght 函数入口
+SEC("uprobe/ght")
+int hook_ght(struct pt_regs *ctx)
+{
+    return submit_abc(ctx, HOOK_GHT, DIR_SEND, false, 0);
+}
+```
+
+### 第 3 步：写 handler `src/user/handler/abc_handler.cpp`
+
+```c
+#include "../../common/abc_event.h"
+#include "../stats/stats_collector.h"
+#include "../output/log_writer.h"
+#include <cstdio>
+#include <cinttypes>
+
+// ★ payload 格式化回调：决定 abc 事件的日志输出格式
+static void format_abc(const void* data, const char* /*hook*/,
+                       char* buf, size_t size)
+{
+    auto* e = static_cast<const abc_event*>(data);
+    snprintf(buf, size,
+             "\"param1\":%" PRIu64 ",\"param2\":%" PRIu64 ",\"retval\":%" PRId64,
+             e->param_bool1, e->param_bool2, e->retval);
+}
+
+// ★ 可选：自定义统计回调
+// static void abc_custom_stats(const void* data, const char* hook,
+//                               StatsCollector* self)
+// {
+//     auto* e = static_cast<const abc_event*>(data);
+//     // 自定义统计逻辑...
+// }
+
+// ★ 必须有的统一入口（函数名 = {name}_event_handler）
+extern "C"
+void abc_event_handler(const void *data, const char *hook,
+                       StatsCollector *stats, ILogWriter *writer)
+{
+    auto *e = static_cast<const abc_event*>(data);
+
+    // 通用统计，不需要时延匹配则 on_latency 传 nullptr
+    stats->process_event(&e->hdr, data, hook, e->retval, nullptr);
+
+    // 通用输出，传入自定义格式化回调
+    writer->write_event(&e->hdr, data, hook, format_abc);
+}
+```
+
+### 第 4 步：配置 `config/hooks.json`
+
+在 `files[]` 数组中加一条：
+
+```json
+{
+    "name": "abc",
+    "ringbuf_map": "abc_events",
+    "module_id": 4,
+    "lib": "xyz.so.3",
+    "target_path": "/usr/lib/xyz.so.3",
+    "hooks": [
+        {
+            "name": "ght",
+            "demangled": "xyz::hij_impl::ght(bool, bool)",
+            "retprobe": false
+        }
+    ]
+}
+```
+
+- `name`：模块名，用于生成 handler 函数名 `abc_event_handler` 和 embed 数组名 `abc_bpf_o`
+- `ringbuf_map`：和 `.bpf.c` 中的 map 名称一致
+- `module_id`：全局唯一，不重复即可
+- `lib`：`symbol/` 下的 `.so` 文件名，用于查偏移表
+- `target_path`：目标机器上的库路径
+- `hooks[]`：要 hook 的函数列表，`name` 是 SEC 名
+
+### 第 5 步：重新生成 + 编译
+
+```bash
+./scripts/export_symbol.sh         # 重新提取偏移
+./scripts/gen_hook_config.sh       # 重新生成头文件
+make                                # 编译
+```
+
+### 新增模块需要改动的文件汇总
+
+| 文件 | 操作 | 说明 |
+|------|:---:|------|
+| `src/common/abc_event.h` | 新建 | 事件结构体 |
+| `src/bpf/abc.bpf.c` | 新建 | BPF 内核代码 |
+| `src/user/handler/abc_handler.cpp` | 新建 | 自定义处理逻辑 |
+| `config/hooks.json` | 修改 | 加一条 `files[]` 条目 |
+| `symbol/xyz.so.3` | 放入 | 本地 .so 文件 |
+
+### 不需要改动的文件
+
+| 文件 | 原因 |
+|------|------|
+| `collector.cpp` | handler 指针由配置驱动 |
+| `collector_manager.cpp` | 遍历 `file_groups[]`，自动覆盖 |
+| `stats_collector.cpp` | `process_event()` 通用入口，数组按 `MAX_MODULE_ID` 自动扩容 |
+| `stdout_writer.cpp` | `write_event()` 通用入口，payload 格式化交给回调 |
+| `file_writer.cpp` | 同上 |
+| `main.cpp` | 遍历 `file_groups[]` 创建 Collector |
 
 ---
 
-## 目标机器部署
+## 设计要点
 
-1. 编译得到 `vsomeip_collector` 可执行文件
-2. 把 `routing.bpf.o`、`app.bpf.o`、`sd.bpf.o` 放到 `/usr/lib/ebpf/`
-3. 目标机器只需要 `.dynsym`（动态符号表），不需要 `.symtab`
-4. 挂载方式使用**文件偏移量**，不依赖符号表
-
----
-
-## 技术要点
-
-- **偏移量挂载**：`bpf_program__attach_uprobe_opts(prog, pid, lib_path, file_offset, opts)`
-  — 不依赖目标机器的符号表，通过 ELF section header 计算的文件偏移挂载
-- **ARM64 目标**：vmlinux.h 已切换为 `arm64/vmlinux_601.h`（Linux 6.1）
-- **C++ mangled name**：通过 `export_symbol.sh` 的 demangled 输出来匹配人类可读的函数签名
-- **Ring buffer**：每个模块独立 ringbuf，epoll 多路复用
+- **偏移量挂载**：`bpf_program__attach_uprobe_opts(prog, pid, lib_path, file_offset, opts)` — 不依赖目标机器的符号表，通过 ELF section header 计算的文件偏移挂载
+- **ARM64 目标**：`vmlinux/vmlinux.h` 指向 `arm64/vmlinux_601.h`（Linux 6.1）
+- **BPF 字节码嵌入**：`xxd -i` 把 `.bpf.o` 转成 C 数组，编译时嵌入可执行文件，部署无需额外文件
+- **Common Header**：所有事件结构体以 `event_header` 开头，用户态通过 module_id 分发到对应 handler
+- **配置驱动**：`hooks.json` → `gen_hook_config.sh` → 自动生成 `file_groups[]`、`hook_ids.h`、`embed_data.cpp`
+- **三层解耦**：collector（加载+挂载）、stats（计数+时延）、writer（日志）都不需要知道模块类型，所有类型相关的逻辑在 handler 的回调函数里
