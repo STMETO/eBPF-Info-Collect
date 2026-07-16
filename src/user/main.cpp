@@ -39,7 +39,7 @@
 #include "collector/collector.h"
 #include "output/stdout_writer.h"
 #include "output/file_writer.h"
-#include "stats_collector.h"
+#include "stats/stats_collector.h"
 #include "../gen/hook_config.h"
 
 // ── 默认配置 ──────────────────────────────────────────────────────────

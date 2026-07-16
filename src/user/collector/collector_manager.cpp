@@ -2,7 +2,7 @@
 
 #include "collector_manager.h"
 #include "../output/log_writer.h"
-#include "../stats_collector.h"
+#include "../stats/stats_collector.h"
 
 #include <cstdio>
 #include <cstdlib>

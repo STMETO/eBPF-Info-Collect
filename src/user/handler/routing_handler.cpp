@@ -6,7 +6,7 @@
 
 #include "../../common/routing_event.h"
 #include "../../common/vsomeip_types.h"
-#include "../stats_collector.h"
+#include "../stats/stats_collector.h"
 #include "../output/log_writer.h"
 #include <cstdio>
 #include <cinttypes>
